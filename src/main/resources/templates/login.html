@@ -1,73 +1,66 @@
 <!DOCTYPE html>
-<!-- 使用thymeleaf，配置相应的 -->
-<html xmlns:th="http://www.thymeleaf.org">  <!-- th!!! 命名空间使用 -->
+<html xmlns:th="http://www.thymeleaf.org">
 <head>
-    <meta charset="UTF-8"/><!--<meta charset="UTF-8" />  thymeleaf模板引擎默认是Template modes:HTML5解析的，所以解析比较严格。  -->
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>闪惠智购商城 — 登录</title>
-    <!-- thymeleaf引入静态资源的方式，@加大括弧    "/" 代表static路径-->
-    <!-- jquery -->
-    <!-- <script type="text/javascript" th:src="@{/js/jequery.min.js}"></script> -->
     <script type="text/javascript" th:src="@{/jquery-validation/lib/jquery-1.11.1.js}"></script>
-    <!-- bootstrap -->
-    <!-- <link type="text/css" rel="stylesheet" th:href="@{/bootstrap/css/bootstrap.min.css}"/> -->
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.0/css/bootstrap.min.css"
-          integrity="sha384-9gVQ4dYFwwWSjIDZnLEWnxCjeSWFphJiwGPXr1jddIhOegiu1FwO5qRGvFXOdJZ4" crossorigin="anonymous"/>
+    <link  type="text/css" rel="stylesheet" th:href="@{/bootstrap/css/bootstrap.css}"/>
     <script type="text/javascript" th:src="@{/bootstrap/js/bootstrap.min.js}"></script>
-    <!--jquery-validator  -->
     <script type="text/javascript" th:src="@{/jquery-validation/jquery.validate.min.js}"></script>
-    <!-- <script type="text/javascript" th:src="@{/jquery-validation/jquery.validate.js}"></script> -->
     <script type="text/javascript" th:src="@{/jquery-validation/localization/messages_zh.min.js}"></script>
-    <!-- layer -->
-    <script type="text/javascript" th:src="@{/layer/layer.js}"></script>
-    <!-- md5.js -->
     <script type="text/javascript" th:src="@{/js/md5.min.js}"></script>
+    <style>
+        * { box-sizing: border-box; }
+        body { background: linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%); min-height: 100vh;
+               display: flex; align-items: center; justify-content: center; margin: 0;
+               font-family: 'PingFang SC','Microsoft YaHei',sans-serif; }
+        .login-wrap { width: 420px; max-width: 95vw; }
+        .brand { text-align: center; margin-bottom: 28px; }
+        .brand .logo { font-size: 30px; font-weight: 900; color: #fff; letter-spacing: 2px; }
+        .brand .logo .accent { color: #e74c3c; }
+        .brand .tagline { color: rgba(255,255,255,.45); font-size: 13px; margin-top: 6px; }
+        .card { border: none; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,.4); overflow: hidden; }
+        .card-top { background: linear-gradient(135deg,#e74c3c,#c0392b); padding: 20px 28px; }
+        .card-top h5 { color: #fff; margin: 0; font-weight: 700; font-size: 16px; letter-spacing: .5px; }
+        .card-body { padding: 30px 28px; background: #fff; }
+        .form-group { margin-bottom: 18px; }
+        .form-group label { font-size: 13px; color: #555; font-weight: 600; margin-bottom: 5px; display: block; }
+        .form-ctrl { border-radius: 8px; border: 1.5px solid #e0e0e0; padding: 10px 14px; font-size: 14px;
+                     width: 100%; transition: border .2s; outline: none; }
+        .form-ctrl:focus { border-color: #e74c3c; box-shadow: 0 0 0 3px rgba(231,76,60,.1); }
+        .btn-login { background: linear-gradient(135deg,#e74c3c,#c0392b); border: none; border-radius: 8px;
+                     width: 100%; padding: 11px; font-size: 15px; font-weight: 700; color: #fff;
+                     letter-spacing: 1px; cursor: pointer; transition: opacity .2s; margin-top: 6px; }
+        .btn-login:hover { opacity: .87; }
+        .hint { text-align: center; margin-top: 16px; font-size: 12px; color: rgba(255,255,255,.35); }
+        em.invalid-feedback { color: #e74c3c; font-size: 12px; font-style: normal; display: block; margin-top: 3px; }
+        .is-invalid { border-color: #e74c3c !important; }
+    </style>
 </head>
 <body>
-<div class="container">
-    <div class="row">
-        <div class="col-sm-8 offset-sm-2">
-            <div class="border-bottom mb-4 mt-4 pb-2">
-
-            </div>
-            <div class="card">
-                <div class="card-header">
-                    <h6 class="card-text">闪惠智购商城 — 用户登录</h6><!--</h3>  -->
+<div class="login-wrap">
+    <div class="brand">
+        <div class="logo">⚡ 闪惠<span class="accent">智购</span>商城</div>
+        <div class="tagline">限时抢购 · AI智能导购 · 极速下单</div>
+    </div>
+    <div class="card">
+        <div class="card-top"><h5>🔐 用户登录</h5></div>
+        <div class="card-body">
+            <form id="signupForm" method="post">
+                <div class="form-group">
+                    <label for="phone">手机号</label>
+                    <input type="text" class="form-ctrl" id="phone" name="phone" placeholder="请输入手机号"/>
                 </div>
-                <div class="card-body">
-                    <form id="signupForm" method="post" class="form-horizontal"><!-- action="" -->
-                        <div class="form-group row">
-                            <label class="col-sm-4 col-form-label" for="phone">手机号</label>
-                            <div class="col-sm-6">
-                                <input type="text" class="form-control" id="phone" name="phone" placeholder="请输入手机号"/>
-                            </div>
-                        </div>
-
-
-                        <div class="form-group row">
-                            <label class="col-sm-4 col-form-label" for="username">用户名</label>
-                            <div class="col-sm-6">
-                                <input type="text" class="form-control" id="username" name="username"
-                                       placeholder="请输入用户名"/>
-                            </div>
-                        </div>
-                        <div class="form-group row">
-                            <label class="col-sm-4 col-form-label" for="password">密码</label>
-                            <div class="col-sm-6">
-                                <input type="password" class="form-control" id="password" name="password"
-                                       placeholder="请输入密码"/>
-                            </div>
-                        </div>
-                        <div class="form-group row">
-                            <div class="col-sm-9 offset-sm-4">
-                                <button type="submit" class="btn btn-primary" name="signup" value="Sign up">登录
-                                </button>
-                            </div>
-                        </div>
-                    </form>
+                <div class="form-group">
+                    <label for="password">密码</label>
+                    <input type="password" class="form-ctrl" id="password" name="password" placeholder="请输入密码"/>
                 </div>
-            </div>
+                <button type="submit" class="btn-login">立即登录</button>
+            </form>
         </div>
     </div>
+    <div class="hint">测试账号：15200000000 ~ 15200000997 &nbsp;|&nbsp; 密码：123456</div>
 </div>
 <script type="text/javascript">
     $.validator.setDefaults({
@@ -77,70 +70,24 @@
             var str = "" + salt.charAt(0) + salt.charAt(2) + pass + salt.charAt(5) + salt.charAt(4);
             var password = md5(str);
             $.ajax({
-                url: "/login/do_login",
-                type: "POST",
-                data: {
-                    mobile: $("#phone").val(),
-                    password: password,
-                },
+                url: "/login/do_login", type: "POST",
+                data: { mobile: $("#phone").val(), password: password },
                 success: function (data) {
-                    if (data.code == 0) {
-                        alert("success");
-                        // 成功后跳转
-                        window.location.href = "/goods/list";
-                    } else {
-                        alert(data.msg);
-                    }
+                    if (data.code == 0) { window.location.href = "/goods/list"; }
+                    else { alert(data.msg); }
                 },
-                error: function (data) {
-                    alert("error");
-                }
+                error: function () { alert("登录失败，请稍后重试"); }
             });
         }
     });
     $(document).ready(function () {
         $("#signupForm").validate({
-            rules: {
-                firstname: "required",
-                lastname: "required",
-                username: {
-                    required: true,
-                    minlength: 2
-                },
-                password: {
-                    required: true,
-                    minlength: 5
-                }
-            },
-            messages: {
-                firstname: "Please enter your firstname",
-                lastname: "Please enter your lastname",
-                username: {
-                    required: "Please enter a username",
-                    minlength: "Your username must consist of at least 2 characters"
-                },
-                password: {
-                    required: "Please provide a password",
-                    minlength: "Your password must be at least 5 characters long"
-                }
-            },
+            rules: { phone: { required: true }, password: { required: true, minlength: 5 } },
+            messages: { phone: "请输入手机号", password: { required: "请输入密码", minlength: "密码至少5位" } },
             errorElement: "em",
-            errorPlacement: function (error, element) {
-                // Add the `invalid-feedback` class to the error element
-                error.addClass("invalid-feedback");
-
-                if (element.prop("type") === "checkbox") {
-                    error.insertAfter(element.next("label"));
-                } else {
-                    error.insertAfter(element);
-                }
-            },
-            highlight: function (element, errorClass, validClass) {
-                $(element).addClass("is-invalid").removeClass("is-valid");
-            },
-            unhighlight: function (element, errorClass, validClass) {
-                $(element).addClass("is-valid").removeClass("is-invalid");
-            }
+            errorPlacement: function (error, element) { error.addClass("invalid-feedback"); error.insertAfter(element); },
+            highlight:   function (element) { $(element).addClass("is-invalid").removeClass("is-valid"); },
+            unhighlight: function (element) { $(element).addClass("is-valid").removeClass("is-invalid"); }
         });
     });
 </script>

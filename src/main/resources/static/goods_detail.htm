@@ -2,173 +2,138 @@
 <html>
 <head>
     <meta charset="UTF-8"/>
-    <title>商品详情</title>
-    <!-- jquery -->
-    <!-- <script type="text/javascript" src="@{/js/jequery.min.js}"></script> -->
-    <script type="text/javascript" src="/jquery-validation/lib/jquery-1.11.1.js"></script>
-    <link type="text/css" rel="stylesheet" href="/bootstrap/css/bootstrap.css"/>
-    <script type="text/javascript" src="/bootstrap/js/bootstrap.min.js"></script>
-    <!-- layer -->
-    <script type="text/javascript" src="/layer/layer.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>闪惠智购商城 — 商品详情</title>
+    <script src="/jquery-validation/lib/jquery-1.11.1.js"></script>
+    <link  rel="stylesheet" href="/bootstrap/css/bootstrap.css"/>
+    <script src="/bootstrap/js/bootstrap.min.js"></script>
+    <script src="/layer/layer.js"></script>
+    <style>
+        body{background:#f4f4f8;font-family:'PingFang SC','Microsoft YaHei',sans-serif;margin:0;}
+        .topbar{background:linear-gradient(135deg,#1a1a2e,#16213e);padding:14px 24px;
+                display:flex;align-items:center;justify-content:space-between;}
+        .topbar .brand{color:#fff;font-size:18px;font-weight:900;letter-spacing:1px;text-decoration:none;}
+        .topbar .brand .accent{color:#e74c3c;}
+        .topbar a.back{color:rgba(255,255,255,.55);font-size:13px;text-decoration:none;}
+        .topbar a.back:hover{color:#fff;}
+        .wrap{max-width:860px;margin:28px auto;padding:0 16px;}
+        #userTip{display:block;color:#e74c3c;font-size:13px;margin-bottom:12px;
+                 background:#fff5f5;border-radius:8px;padding:10px 14px;}
+        .detail-card{background:#fff;border-radius:14px;box-shadow:0 2px 14px rgba(0,0,0,.08);
+                     overflow:hidden;display:flex;flex-wrap:wrap;}
+        .thumb-col{width:320px;background:linear-gradient(135deg,#f5f5f5,#ececec);
+                   display:flex;align-items:center;justify-content:center;
+                   font-size:96px;min-height:280px;flex-shrink:0;}
+        .info-col{flex:1;padding:28px;min-width:260px;}
+        .goods-title{font-size:20px;font-weight:700;color:#222;margin-bottom:16px;line-height:1.4;}
+        .price-block{background:#fff8f8;border-radius:10px;padding:14px 18px;
+                     margin-bottom:16px;display:flex;align-items:baseline;gap:12px;}
+        .price-seckill{font-size:34px;font-weight:900;color:#e74c3c;}
+        .price-seckill::before{content:'¥';font-size:18px;}
+        .price-origin{font-size:13px;color:#aaa;text-decoration:line-through;}
+        .price-origin::before{content:'原价 ¥';}
+        .meta-row{display:flex;font-size:13px;color:#666;margin-bottom:10px;align-items:center;}
+        .meta-row .lbl{color:#aaa;width:80px;flex-shrink:0;}
+        .countdown-box{background:#1a1a2e;color:#fff;border-radius:10px;
+                       padding:12px 16px;margin-bottom:16px;font-size:14px;min-height:42px;}
+        .vcode-row{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
+        #verifyCodeImg{border-radius:6px;cursor:pointer;height:36px;}
+        #verifyCode{border:1.5px solid #e0e0e0;border-radius:8px;padding:8px 12px;
+                    font-size:14px;width:120px;outline:none;}
+        .btn-seckill{background:linear-gradient(135deg,#e74c3c,#c0392b);color:#fff;border:none;
+                     border-radius:10px;padding:13px 40px;font-size:16px;font-weight:700;
+                     cursor:pointer;letter-spacing:1px;transition:opacity .2s;}
+        .btn-seckill:disabled{opacity:.4;cursor:not-allowed;}
+        .btn-seckill:not(:disabled):hover{opacity:.87;}
+        @media(max-width:640px){.thumb-col{width:100%;min-height:180px;font-size:70px;}
+                                .info-col{padding:18px 14px;}}
+    </style>
 </head>
 <body>
-<div class="panel panel-default">
-    <div class="panel-heading">秒杀商品详情</div>
-    <div class="panel-body">
-        <span id="userTip">您还没有登录，请登录后再操作</span>
-        <span>没有收货地址的提示。。。</span>
-        <input type="hidden" id="goodsId">  <!-- $("#goodsId").val(goods.id); -->
-    </div>
-    <table class="table" id="goodslist">
-        <tr>
-            <td>商品名称</td>
-            <td colspan="3" id="goodsName"></td>
-        </tr>
-        <tr>
-            <td>商品图片</td>
-            <td colspan="3"><img id="goodsImg" width="80" height="60"></img></td>
-        </tr>
-        <tr>
-            <td>秒杀开始时间</td>
-            <td id="startTime"></td>
-            <td id="">
-                <!-- 先取得这个时间 -->
-                <input type="hidden" id="remainingSeconds"></input>
-                <span id="seckillTip"></span>
-            </td>
-            <td>
-                <div class="row">
-                    <div class="form-inline">
-                        <img id="verifyCodeImg" width="80" height="30" style="display:none"
-                             onclick="refreshVCode()"></img><!-- 验证码图片 -->
-                        <input id="verifyCode" class="form-control" style="display:none"></input>
-                        <button class="btn btn-primary" type="button" id="buyButton" onclick="getSeckillPath()">
-                            立即秒杀
-                        </button>
-                    </div>
-                </div>
-            </td>
-        </tr>
-        <tr>
-            <td>商品原价</td>
-            <td colspan="3" id="goodsPrice"></td>
-        </tr>
-        <tr>
-            <td>秒杀价</td>
-            <td colspan="3" id="seckillPrice"></td>
-        </tr>
-        <tr>
-            <td>库存数量</td>
-            <td colspan="3" id="stockCount"></td>
-        </tr>
-    </table>
+<div class="topbar">
+    <a class="brand" href="/goods/list">⚡ 闪惠<span class="accent">智购</span>商城</a>
+    <a class="back" href="/goods/list">← 返回列表</a>
 </div>
-</body>
+<div class="wrap">
+    <span id="userTip">您还没有登录，请<a href="/login/index" style="color:#e74c3c;font-weight:600;">点此登录</a>后参与秒杀</span>
+    <input type="hidden" id="goodsId"/>
+    <div class="detail-card">
+        <div class="thumb-col">🛍️</div>
+        <div class="info-col">
+            <div class="goods-title" id="goodsName">加载中...</div>
+            <div class="price-block">
+                <span class="price-seckill" id="seckillPrice">—</span>
+                <span class="price-origin"  id="goodsPrice">—</span>
+            </div>
+            <div class="meta-row"><span class="lbl">库存</span><span id="stockCount">—</span> 件</div>
+            <div class="meta-row"><span class="lbl">开抢时间</span><span id="startTime">—</span></div>
+            <div id="seckillTip" class="countdown-box">加载中...</div>
+            <input type="hidden" id="remainingSeconds"/>
+            <div class="vcode-row">
+                <img id="verifyCodeImg" style="display:none" onclick="refreshVCode()"/>
+                <input id="verifyCode" placeholder="验证码" style="display:none"/>
+            </div>
+            <button class="btn-seckill" type="button" id="buyButton" onclick="getSeckillPath()">⚡ 立即秒杀</button>
+        </div>
+    </div>
+    <img id="goodsImg" style="display:none"/>
+</div>
 <script type="text/javascript">
-    // 页面初始化
-    $(function () {
-        getDetail();
-    });
+    $(function () { getDetail(); });
 
-    // 获取秒杀地址
     function getSeckillPath() {
         var goodsId = $("#goodsId").val();
         $.ajax({
-            url: "/seckill/getPath",
-            type: "GET",
-            data: {
-                goodsId: goodsId,
-                verifyCode: $("#verifyCode").val()
-            },
+            url: "/seckill/getPath", type: "GET",
+            data: { goodsId: goodsId, verifyCode: $("#verifyCode").val() },
             success: function (data) {
-                if (data.code == 0) {
-                    //获取秒杀地址
-                    var path = data.data;
-                    //拿到path之后，才去
-                    doSeckill(path);
-                } else {
-                    layer.msg(data.msg);
-                }
+                if (data.code == 0) { doSeckill(data.data); }
+                else { layer.msg(data.msg); }
             },
-            error: function () {
-                layer.msg("请求有误！");
-            }
-            //token如果cookie里面有，会自己带过去
+            error: function () { layer.msg("请求有误！"); }
         });
     }
 
-    //做轮询
     function getSeckillResult(goodsId) {
         $.ajax({
-            url: "/seckill/result",
-            type: "GET",
-            data: {
-                goodsId: $("#goodsId").val()
-            },
+            url: "/seckill/result", type: "GET",
+            data: { goodsId: $("#goodsId").val() },
             success: function (data) {
                 if (data.code == 0) {
                     var result = data.data;
                     if (result < 0) {
                         layer.msg("抱歉，秒杀失败!");
                     } else if (result == 0) {
-                        //继续轮询
-                        setTimeout(function () {
-                            getSeckillResult(goodsId);
-                        }, 50);//50ms之后继续轮询
+                        setTimeout(function () { getSeckillResult(goodsId); }, 50);
                         layer.msg(data.msg);
                     } else {
-                        layer.confirm("恭喜你，秒杀成功!查看订单?", {
-                            btn: ["确定", "取消"]
-                        }, function () {
-                            //秒杀成功，跳转详情页面
-                            window.location.href = "order_detail.htm?orderId="
-                                + result;
-                        }, function () {
-                            layer.closeAll();
-                        });
+                        layer.confirm("恭喜你，秒杀成功！查看订单？", { btn: ["确定","取消"] },
+                            function () { window.location.href = "order_detail.htm?orderId=" + result; },
+                            function () { layer.closeAll(); });
                     }
-                } else {
-                    layer.msg(data.msg);
-                }
+                } else { layer.msg(data.msg); }
             },
-            error: function () {
-                layer.msg("请求有误！");
-            }
+            error: function () { layer.msg("请求有误！"); }
         });
     }
 
     function doSeckill(path) {
-        alert(path);
-        alert("秒杀!");
         $.ajax({
-            url: "/seckill/" + path + "/seckillWithCacheAndMQ",
-            type: "POST",
-            data: {
-                goodsId: $("#goodsId").val()
-
-            },
+            url: "/seckill/" + path + "/seckillWithCacheAndMQ", type: "POST",
+            data: { goodsId: $("#goodsId").val() },
             success: function (data) {
-                if (data.code == 0) {
-                    getSeckillResult($("#goodsId").val());
-                } else {
-                    layer.msg(data.msg);
-                }
+                if (data.code == 0) { getSeckillResult($("#goodsId").val()); }
+                else { layer.msg(data.msg); }
             },
-            error: function () {
-                layer.msg("请求有误！");
-            }
+            error: function () { layer.msg("请求有误！"); }
         });
     }
 
-    // 渲染页面
     function render(detail) {
         var remainingSeconds = detail.remainingSeconds;
         var goods = detail.goodsVo;
-        var user = detail.user;
-        if (user != null) {
-            //展示相应的
-            $("#userTip").hide();
-        }
+        var user  = detail.user;
+        if (user != null) { $("#userTip").hide(); }
         $("#goodsName").text(goods.goodsName);
         $("#goodsImg").attr("src", goods.goodsImg);
         $("#startTime").text(goods.startDate);
@@ -183,72 +148,50 @@
     function getQueryString(name) {
         var reg = new RegExp("(^|&)" + name + "=([^&]*)(&|$)");
         var r = window.location.search.substr(1).match(reg);
-        if (r != null) {
-            return unescape(r[2]);
-        }
+        if (r != null) { return unescape(r[2]); }
         return null;
     }
 
     function getDetail() {
         var goodsId = getQueryString("goodsId");
-        //alert(goodsId);
         $.ajax({
-            url: "/goods/detailStatic/" + goodsId,
-            type: "GET",
+            url: "/goods/detailStatic/" + goodsId, type: "GET",
             success: function (data) {
-                if (data.code == 0) {
-                    //渲染页面
-                    render(data.data);
-                } else {
-                    layer.msg(data.msg);
-                }
+                if (data.code == 0) { render(data.data); }
+                else { layer.msg(data.msg); }
             },
-            error: function () {
-                layer.msg("请求有误！");
-            }
+            error: function () { layer.msg("请求有误！"); }
         });
-
     }
 
-    // 刷新验证码 浏览器具有缓存 所以加一个参数
     function refreshVCode() {
         $("#verifyCodeImg").attr("src", "/seckill/verifyCode?goodsId=" + $("#goodsId").val() + "&timestamp=" + new Date().getTime());
     }
 
     function countDown() {
-        // 获取秒杀倒计时进行判断，0 -> 正在进行秒杀 -1 -> 秒杀结束 remainingSeconds > 0-> 代表倒计时
-        var remainingSeconds = $("#remainingSeconds").val();
+        var s = parseInt($("#remainingSeconds").val());
         var timeout;
-
-        if (remainingSeconds > 0) { // 秒杀还没有开始，进行倒计时功能
+        if (s > 0) {
             $("#buyButton").attr("disabled", true);
-            $("#seckillTip").html("秒杀倒计时：" + remainingSeconds + "秒");
-            // 倒计时
+            $("#seckillTip").html("⏳ 距开抢：<strong>" + s + "</strong> 秒");
             timeout = setTimeout(function () {
-                $("#countDown").text(remainingSeconds - 1);
-                $("#remainingSeconds").val(remainingSeconds - 1); // remainingSeconds 这是 input
+                $("#remainingSeconds").val(s - 1);
                 countDown();
-            }, 1000); // 一秒钟之后回调函数
-        } else if (remainingSeconds == 0) { // 正在进行秒杀
+            }, 1000);
+        } else if (s == 0) {
             $("#buyButton").attr("disabled", false);
-            if (timeout) { // 如果timeout有值的情况
-                clearTimeout(timeout);
-            }
-            // 将文案修改 df1fab4272a24cdf9432adb9fd69cb38
-            $("#seckillTip").html("秒杀进行中");
-            //添加验证码
+            if (timeout) { clearTimeout(timeout); }
+            $("#seckillTip").html("🔥 秒杀进行中！");
             $("#verifyCodeImg").attr("src", "/seckill/verifyCode?goodsId=" + $("#goodsId").val());
             $("#verifyCodeImg").show();
             $("#verifyCode").show();
-
         } else {
-            // 小于0的情况，秒杀结束，将秒杀按钮设置为不可点击
             $("#buyButton").attr("disabled", true);
-            $("#seckillTip").html("秒杀结束");
-            //隐藏验证码
+            $("#seckillTip").html("本场秒杀已结束");
             $("#verifyCodeImg").hide();
             $("#verifyCode").hide();
         }
     }
 </script>
+</body>
 </html>

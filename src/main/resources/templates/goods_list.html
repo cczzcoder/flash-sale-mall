@@ -1,46 +1,89 @@
 <!DOCTYPE html>
-<!-- 使用thymeleaf，配置相应的 -->
-<html xmlns:th="http://www.thymeleaf.org">  <!-- th!!! 命名空间使用 -->
+<html xmlns:th="http://www.thymeleaf.org">
 <head>
-<meta charset="UTF-8"/><!--<meta charset="UTF-8" />  thymeleaf模板引擎默认是Template modes:HTML5解析的，所以解析比较严格。  -->
-<title>闪惠智购商城 — 秒杀商品列表</title>
-	<!-- thymeleaf引入静态资源的方式，@加大括弧    "/" 代表static路径-->
-	<!-- jquery -->
-	<!-- <script type="text/javascript" th:src="@{/js/jequery.min.js}"></script> -->
-	<script type="text/javascript" th:src="@{/jquery-validation/lib/jquery-1.11.1.js}"></script>
-	<!-- bootstrap -->
-	<!-- <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.0/css/bootstrap.min.css" integrity="sha384-9gVQ4dYFwwWSjIDZnLEWnxCjeSWFphJiwGPXr1jddIhOegiu1FwO5qRGvFXOdJZ4" crossorigin="anonymous"/>
-	 -->
-	<link type="text/css" rel="stylesheet" th:href="@{/bootstrap/css/bootstrap.css}"/>
-	<script type="text/javascript" th:src="@{/bootstrap/js/bootstrap.min.js}"></script>
-
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>闪惠智购商城 — 秒杀商品列表</title>
+    <script type="text/javascript" th:src="@{/jquery-validation/lib/jquery-1.11.1.js}"></script>
+    <link  type="text/css" rel="stylesheet" th:href="@{/bootstrap/css/bootstrap.css}"/>
+    <script type="text/javascript" th:src="@{/bootstrap/js/bootstrap.min.js}"></script>
+    <style>
+        body { background: #f4f4f8; font-family: 'PingFang SC','Microsoft YaHei',sans-serif; margin: 0; }
+        .topbar { background: linear-gradient(135deg,#1a1a2e,#16213e); padding: 14px 24px;
+                  display: flex; align-items: center; justify-content: space-between; }
+        .topbar .brand { color: #fff; font-size: 20px; font-weight: 900; letter-spacing: 1px; text-decoration: none; }
+        .topbar .brand .accent { color: #e74c3c; }
+        .topbar .nav-tip { color: rgba(255,255,255,.5); font-size: 13px; }
+        .hero { background: linear-gradient(135deg,#e74c3c 0%,#c0392b 60%,#922b21 100%);
+                color: #fff; padding: 40px 24px; text-align: center; }
+        .hero .live-badge { display: inline-block; background: rgba(255,255,255,.2);
+                            border: 1px solid rgba(255,255,255,.4); border-radius: 20px;
+                            padding: 3px 16px; font-size: 12px; margin-bottom: 14px; letter-spacing: 1px; }
+        .hero h1 { font-size: 34px; font-weight: 900; letter-spacing: 3px; margin: 0 0 8px; }
+        .hero .sub { font-size: 14px; opacity: .82; margin: 0; }
+        .section-title { font-size: 17px; font-weight: 700; color: #333;
+                         border-left: 4px solid #e74c3c; padding-left: 12px; margin: 28px 0 18px; }
+        .goods-card { background: #fff; border-radius: 14px; box-shadow: 0 2px 12px rgba(0,0,0,.07);
+                      overflow: hidden; transition: transform .2s, box-shadow .2s; height: 100%; display: flex; flex-direction: column; }
+        .goods-card:hover { transform: translateY(-5px); box-shadow: 0 10px 30px rgba(0,0,0,.13); }
+        .goods-thumb { background: linear-gradient(135deg,#f5f5f5,#ececec); height: 150px;
+                       display: flex; align-items: center; justify-content: center; font-size: 56px; }
+        .goods-body { padding: 14px 16px 16px; flex: 1; display: flex; flex-direction: column; }
+        .goods-name { font-size: 14px; font-weight: 600; color: #333; margin-bottom: 10px; line-height: 1.5;
+                      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; flex: 1; }
+        .price-row { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+        .price-seckill { font-size: 22px; font-weight: 900; color: #e74c3c; }
+        .price-seckill::before { content: '¥'; font-size: 13px; vertical-align: baseline; }
+        .price-origin  { font-size: 13px; color: #bbb; text-decoration: line-through; }
+        .price-origin::before { content: '¥'; }
+        .stock-bar { background: #f0f0f0; border-radius: 4px; height: 5px; margin-bottom: 6px; overflow: hidden; }
+        .stock-fill { background: linear-gradient(90deg,#e74c3c,#f39c12); height: 100%; border-radius: 4px; }
+        .stock-tip { font-size: 12px; color: #e74c3c; font-weight: 500; margin-bottom: 12px; }
+        .btn-buy { background: linear-gradient(135deg,#e74c3c,#c0392b); color: #fff; border: none;
+                   border-radius: 8px; width: 100%; padding: 9px 0; font-size: 13px; font-weight: 700;
+                   cursor: pointer; letter-spacing: .5px; transition: opacity .2s;
+                   display: block; text-align: center; text-decoration: none; }
+        .btn-buy:hover { opacity: .85; color: #fff; text-decoration: none; }
+        .ai-float { position: fixed; bottom: 36px; right: 28px; z-index: 999;
+                    background: linear-gradient(135deg,#4a90e2,#7b68ee); color: #fff;
+                    border-radius: 50px; padding: 12px 20px; text-decoration: none;
+                    font-size: 14px; font-weight: bold; box-shadow: 0 4px 14px rgba(74,144,226,.5);
+                    display: flex; align-items: center; gap: 8px; }
+        .ai-float:hover { color: #fff; text-decoration: none; opacity: .9; }
+    </style>
 </head>
 <body>
-	<div class="panel panel-default">
-		<div class="panel-heading">闪惠智购商城 — 秒杀商品列表</div>
-		<table class="table" id="goodslist">
-		<tr><td>商品名称</td><td>商品图片</td><td>商品原价</td><td>秒杀价</td><td>库存数量</td><td>详情</td></tr>
-		<tr th:each="goods,goodsStat:${goodsList}">
-			<td th:text="${goods.goodsName}"></td>
-			<td><img th:src="@{${goods.goodsImg}}" width="80" height="60"></img></td>
-			<td th:text="${goods.goodsPrice}"></td>
-			<td th:text="${goods.seckillPrice}"></td>
-			<td th:text="${goods.stockCount}"></td>
-			<!-- <td><a th:href="'/goods/to_detail/'+${goods.id}">详情</a></td> -->
-			<!-- 直接请求静态页面 -->
-			<td><a th:href="'/goods_detail.htm?goodsId='+${goods.id}">详情</a></td>
-		</tr>
-		</table>
-	</div>
-	<!-- AI 导购浮动入口 -->
-	<a href="/ai/guide" title="AI 导购助手"
-	   style="position:fixed;bottom:36px;right:28px;z-index:999;
-	          background:linear-gradient(135deg,#4a90e2,#7b68ee);
-	          color:#fff;border-radius:50px;padding:12px 20px;
-	          text-decoration:none;font-size:14px;font-weight:bold;
-	          box-shadow:0 4px 14px rgba(74,144,226,.5);
-	          display:flex;align-items:center;gap:8px;">
-		🤖 AI 导购
-	</a>
+<div class="topbar">
+    <a class="brand" href="/goods/list">⚡ 闪惠<span class="accent">智购</span>商城</a>
+    <span class="nav-tip">限时抢购平台</span>
+</div>
+<div class="hero">
+    <div class="live-badge">🔴 限时特卖 LIVE</div>
+    <h1>⚡ 限时秒杀</h1>
+    <p class="sub">手慢无货 · 超低折扣 · 正品保障</p>
+</div>
+<div class="container py-4">
+    <div class="section-title">🔥 今日秒杀商品</div>
+    <div class="row">
+        <div th:each="goods : ${goodsList}" class="col-6 col-md-4 col-lg-3 mb-4">
+            <div class="goods-card">
+                <div class="goods-thumb">🛍️</div>
+                <div class="goods-body">
+                    <div class="goods-name" th:text="${goods.goodsName}">商品名称</div>
+                    <div class="price-row">
+                        <span class="price-seckill" th:text="${goods.seckillPrice}">0</span>
+                        <span class="price-origin"  th:text="${goods.goodsPrice}">0</span>
+                    </div>
+                    <div class="stock-bar">
+                        <div class="stock-fill" th:style="'width:' + (${goods.stockCount} > 100 ? 80 : (${goods.stockCount} > 0 ? ${goods.stockCount} : 5)) + '%'"></div>
+                    </div>
+                    <div class="stock-tip">仅剩 <span th:text="${goods.stockCount}">0</span> 件</div>
+                    <a class="btn-buy" th:href="'/goods_detail.htm?goodsId='+${goods.id}">立即抢购 →</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<a href="/ai/guide" class="ai-float">🤖 AI 导购</a>
 </body>
 </html>
