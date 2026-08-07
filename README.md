@@ -109,32 +109,6 @@ git clone https://github.com/pitt1997/seckill
 -   **秒杀商品管理**：管理员可以增加、修改商品秒杀时间，设置秒杀库存。
 -   **用户管理**：管理员可以查看所有用户的秒杀记录。
 
-## 示例页面截图
-
-### 登录页面
-
-![Login](images/login.png)
-
-### 商品列表页面
-
-![Goods List](images/goods_list.png)
-
-### 商品详情页面
-
-![Goods Detail](images/goods_detail.png)
-
-### 秒杀倒计时页面
-
-![Countdown](images/wait.png)
-
-### 成功秒杀页面
-
-![Success](images/seckill_success.png)
-
-## 更多资源与学习资料
-- [个人博客](https://blog.csdn.net/brad_pitt7)
-- [项目文档与教程](https://blog.csdn.net/brad_pitt7)
-
 * * *
 
 ---
