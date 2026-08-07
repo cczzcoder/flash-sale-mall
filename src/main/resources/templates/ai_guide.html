@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <title>闪惠智购商城 — AI 导购助手</title>
+    <script type="text/javascript" th:src="@{/jquery-validation/lib/jquery-1.11.1.js}"></script>
+    <link type="text/css" rel="stylesheet" th:href="@{/bootstrap/css/bootstrap.css}"/>
+    <script type="text/javascript" th:src="@{/bootstrap/js/bootstrap.min.js}"></script>
+    <style>
+        body { background: #f5f6fa; margin: 0; }
+
+        .chat-container {
+            max-width: 780px;
+            margin: 28px auto 20px;
+        }
+
+        /* ---- 页头 ---- */
+        .chat-header {
+            background: linear-gradient(135deg, #4a90e2, #7b68ee);
+            color: #fff;
+            border-radius: 12px 12px 0 0;
+            padding: 14px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .chat-header .title   { font-size: 17px; font-weight: bold; letter-spacing: 1px; }
+        .chat-header .subtitle{ font-size: 12px; opacity: .8; margin-top: 2px; }
+        .chat-header .avatar  {
+            width: 40px; height: 40px; border-radius: 50%;
+            background: rgba(255,255,255,.22);
+            display: flex; align-items: center; justify-content: center; font-size: 20px;
+        }
+
+        /* ---- 语言切换 ---- */
+        .lang-bar {
+            background: #fff;
+            border-left: 1px solid #e0e0e0;
+            border-right: 1px solid #e0e0e0;
+            padding: 6px 16px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: #999;
+        }
+        .lang-btn {
+            border: 1px solid #d0d0d0;
+            border-radius: 14px;
+            padding: 2px 12px;
+            font-size: 12px;
+            cursor: pointer;
+            background: #f5f5f5;
+            color: #555;
+            transition: all .15s;
+        }
+        .lang-btn.active {
+            background: #4a90e2;
+            border-color: #4a90e2;
+            color: #fff;
+        }
+
+        /* ---- 消息区 ---- */
+        .chat-body {
+            background: #fff;
+            border: 1px solid #e0e0e0;
+            border-top: none;
+            height: 440px;
+            overflow-y: auto;
+            padding: 18px 14px;
+        }
+
+        .msg-row          { display: flex; margin-bottom: 14px; align-items: flex-start; }
+        .msg-row.user     { flex-direction: row-reverse; }
+
+        .bubble-icon {
+            width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+            display: flex; align-items: center; justify-content: center; font-size: 17px;
+        }
+        .ai-icon   { background: #e8f0fe; margin-right: 9px; }
+        .user-icon { background: #e6f4ea; margin-left:  9px; }
+
+        .bubble {
+            max-width: 68%;
+            padding: 9px 13px;
+            border-radius: 12px;
+            font-size: 14px;
+            line-height: 1.65;
+            word-break: break-word;
+            white-space: pre-wrap;
+        }
+        .ai-bubble   { background: #f0f4ff; color: #333; border-top-left-radius: 2px; }
+        .user-bubble { background: #4a90e2; color: #fff; border-top-right-radius: 2px; }
+
+        .bubble .ts { font-size: 11px; opacity: .5; margin-top: 4px; text-align: right; }
+
+        /* 打字光标 */
+        .cursor {
+            display: inline-block;
+            width: 2px; height: 14px;
+            background: #4a90e2;
+            vertical-align: middle;
+            margin-left: 2px;
+            animation: blink .7s step-end infinite;
+        }
+        @keyframes blink { 50% { opacity: 0; } }
+
+        /* 等待动效 */
+        .typing-dots span {
+            display: inline-block;
+            width: 7px; height: 7px; margin: 0 2px;
+            background: #4a90e2; border-radius: 50%;
+            animation: bounce 1.2s infinite ease-in-out;
+        }
+        .typing-dots span:nth-child(2) { animation-delay: .2s; }
+        .typing-dots span:nth-child(3) { animation-delay: .4s; }
+        @keyframes bounce {
+            0%,80%,100% { transform: scale(.6); opacity:.4; }
+            40%          { transform: scale(1);  opacity:1; }
+        }
+
+        /* ---- 快捷提问 ---- */
+        .quick-actions {
+            padding: 7px 14px 0;
+            background: #fff;
+            border-left: 1px solid #e0e0e0;
+            border-right: 1px solid #e0e0e0;
+        }
+        .quick-actions .qlabel { font-size: 12px; color: #aaa; margin-bottom: 5px; }
+        .quick-btn {
+            display: inline-block;
+            background: #f0f4ff; color: #4a90e2;
+            border: 1px solid #c9d9f5; border-radius: 18px;
+            padding: 3px 11px; font-size: 13px;
+            margin: 0 5px 5px 0; cursor: pointer;
+        }
+        .quick-btn:hover { background: #dce8fb; }
+
+        /* ---- 输入区 ---- */
+        .chat-footer {
+            background: #fff;
+            border: 1px solid #e0e0e0;
+            border-top: 1px solid #eee;
+            border-radius: 0 0 12px 12px;
+            padding: 11px 13px;
+            display: flex; gap: 7px; align-items: flex-end;
+        }
+        #msgInput {
+            flex: 1; resize: none; border: 1px solid #ccc; border-radius: 8px;
+            padding: 7px 11px; font-size: 14px; outline: none;
+            transition: border .2s; max-height: 110px;
+        }
+        #msgInput:focus { border-color: #4a90e2; }
+
+        .btn-send {
+            background: #4a90e2; color: #fff; border: none;
+            border-radius: 8px; padding: 7px 18px; font-size: 14px;
+            cursor: pointer; white-space: nowrap;
+        }
+        .btn-send:hover    { background: #357abd; }
+        .btn-send:disabled { opacity: .5; cursor: not-allowed; }
+
+        .btn-clear {
+            background: #f5f5f5; color: #666;
+            border: 1px solid #ddd; border-radius: 8px;
+            padding: 7px 13px; font-size: 13px; cursor: pointer; white-space: nowrap;
+        }
+        .btn-clear:hover { background: #eaeaea; }
+
+        .back-link { margin-top: 10px; text-align: center; font-size: 13px; }
+    </style>
+</head>
+<body>
+<div class="chat-container">
+
+    <!-- 页头 -->
+    <div class="chat-header">
+        <div>
+            <div class="title">🤖 AI 导购助手</div>
+            <div class="subtitle">智能选品 · 秒杀提醒 · 个性推荐</div>
+        </div>
+        <div class="avatar">🛒</div>
+    </div>
+
+    <!-- 语言切换 -->
+    <div class="lang-bar">
+        <span>语言：</span>
+        <button class="lang-btn active" data-lang="zh" onclick="setLang(this)">中文</button>
+        <button class="lang-btn"        data-lang="en" onclick="setLang(this)">English</button>
+        <button class="lang-btn"        data-lang="ja" onclick="setLang(this)">日本語</button>
+    </div>
+
+    <!-- 消息区 -->
+    <div class="chat-body" id="chatBody"></div>
+
+    <!-- 快捷提问 -->
+    <div class="quick-actions">
+        <div class="qlabel">💡 快捷提问：</div>
+        <span class="quick-btn" onclick="quickAsk(this)" data-zh="现在有哪些秒杀商品？" data-en="What items are on flash sale now?" data-ja="今セール中の商品は何ですか？">秒杀商品</span>
+        <span class="quick-btn" onclick="quickAsk(this)" data-zh="推荐性价比最高的商品" data-en="Recommend the best value product" data-ja="コスパ最高の商品を教えて">性价比推荐</span>
+        <span class="quick-btn" onclick="quickAsk(this)" data-zh="秒杀什么时候开始？"   data-en="When does the flash sale start?"  data-ja="セールはいつ始まりますか？">开抢时间</span>
+        <span class="quick-btn" onclick="quickAsk(this)" data-zh="库存还剩多少？"       data-en="How much stock is left?"          data-ja="在庫はどのくらい残っていますか？">剩余库存</span>
+    </div>
+
+    <!-- 输入区 -->
+    <div class="chat-footer">
+        <textarea id="msgInput" rows="1" placeholder="输入问题，Enter 发送（Shift+Enter 换行）…"></textarea>
+        <button class="btn-clear" onclick="clearSession()">重置</button>
+        <button class="btn-send"  onclick="sendMessage()" id="sendBtn">发送</button>
+    </div>
+
+    <div class="back-link"><a href="/goods/list">← 返回商品列表</a></div>
+</div>
+
+<script>
+    var currentLang = 'zh';
+    var isWaiting = false;
+    // 是否支持 fetch + ReadableStream（流式）
+    var supportsStream = typeof fetch !== 'undefined' && typeof ReadableStream !== 'undefined';
+
+    // ---- 初始化 ----
+    $(function () {
+        appendAiMsg('您好！我是 AI 导购助手 🎉\n\n我可以帮您了解当前秒杀商品、智能推荐适合您的商品，并解答秒杀活动相关问题。\n\n请问有什么可以帮到您？');
+
+        $('#msgInput')
+            .on('input', function () {
+                this.style.height = 'auto';
+                this.style.height = Math.min(this.scrollHeight, 110) + 'px';
+            })
+            .on('keydown', function (e) {
+                if (e.keyCode === 13 && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+            });
+    });
+
+    // ---- 语言切换 ----
+    function setLang(btn) {
+        currentLang = btn.getAttribute('data-lang');
+        $('.lang-btn').removeClass('active');
+        $(btn).addClass('active');
+    }
+
+    // ---- 快捷提问 ----
+    function quickAsk(el) {
+        if (isWaiting) return;
+        var text = el.getAttribute('data-' + currentLang) || el.getAttribute('data-zh');
+        $('#msgInput').val(text);
+        sendMessage();
+    }
+
+    // ---- 发送消息 ----
+    function sendMessage() {
+        if (isWaiting) return;
+        var msg = $.trim($('#msgInput').val());
+        if (!msg) return;
+
+        appendUserMsg(msg);
+        $('#msgInput').val('').css('height', 'auto');
+        setWaiting(true);
+
+        if (supportsStream) {
+            sendStream(msg);
+        } else {
+            sendSync(msg);
+        }
+    }
+
+    // ---- 流式发送（Fetch + ReadableStream → 打字机效果）----
+    function sendStream(msg) {
+        var bubble = null; // 将在收到第一个 chunk 时创建
+
+        fetch('/ai/stream', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: msg, lang: currentLang })
+        }).then(function (response) {
+            if (!response.ok) throw new Error('HTTP ' + response.status);
+            var reader = response.body.getReader();
+            var decoder = new TextDecoder();
+            var buffer  = '';
+
+            function read() {
+                return reader.read().then(function (result) {
+                    if (result.done) {
+                        finalizeBubble(bubble);
+                        setWaiting(false);
+                        return;
+                    }
+                    buffer += decoder.decode(result.value, { stream: true });
+
+                    // 按行解析 SSE
+                    var lines = buffer.split('\n');
+                    buffer = lines.pop(); // 保留未完整的行
+
+                    for (var i = 0; i < lines.length; i++) {
+                        var line = lines[i];
+                        if (!line.startsWith('data:')) continue;
+                        var data = line.slice(5).trim();
+                        if (!data) continue;
+
+                        try {
+                            var json = JSON.parse(data);
+                            if (json.text) {
+                                if (!bubble) bubble = createAiBubble();
+                                appendChunk(bubble, json.text);
+                            }
+                            if (json.msg) { // error event
+                                if (!bubble) bubble = createAiBubble();
+                                appendChunk(bubble, json.msg);
+                            }
+                        } catch (e) { /* ignore malformed */ }
+                    }
+
+                    return read();
+                });
+            }
+            return read();
+        }).catch(function (err) {
+            finalizeBubble(bubble);
+            if (!bubble) appendAiMsg('网络异常，请检查连接后重试 🙏');
+            setWaiting(false);
+        });
+    }
+
+    // ---- 非流式发送（降级兜底）----
+    function sendSync(msg) {
+        $.ajax({
+            url: '/ai/chat',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ message: msg, lang: currentLang }),
+            success: function (res) {
+                var reply = (res && res.data && res.data.reply) ? res.data.reply : '获取回复时出现异常，请稍后重试。';
+                appendAiMsg(reply);
+            },
+            error: function () { appendAiMsg('网络异常，请检查连接后重试 🙏'); },
+            complete: function () { setWaiting(false); }
+        });
+    }
+
+    // ---- 重置对话 ----
+    function clearSession() {
+        if (isWaiting) return;
+        $.post('/ai/clear', function () {
+            $('#chatBody').empty();
+            appendAiMsg('对话已重置，欢迎开启新的咨询 🎉');
+        });
+    }
+
+    // ---- 气泡渲染 ----
+
+    function createAiBubble() {
+        var time = nowStr();
+        var row = $('<div class="msg-row ai"></div>');
+        var icon = $('<div class="bubble-icon ai-icon">🤖</div>');
+        var bbl  = $('<div class="bubble ai-bubble"></div>');
+        var txt  = $('<span class="bbl-text"></span>');
+        var cur  = $('<span class="cursor"></span>');
+        var ts   = $('<div class="ts"></div>').text(time);
+        bbl.append(txt).append(cur).append(ts);
+        row.append(icon).append(bbl);
+        $('#chatBody').append(row);
+        scrollBottom();
+        return { row: row, txt: txt, cur: cur, ts: ts };
+    }
+
+    function appendChunk(bubble, text) {
+        if (!bubble) return;
+        // 追加纯文本（已转为显示用）
+        bubble.txt.text(bubble.txt.text() + text);
+        scrollBottom();
+    }
+
+    function finalizeBubble(bubble) {
+        if (!bubble) return;
+        bubble.cur.remove(); // 移除光标
+    }
+
+    function appendAiMsg(text) {
+        var bubble = createAiBubble();
+        bubble.txt.text(text);
+        finalizeBubble(bubble);
+    }
+
+    function appendUserMsg(text) {
+        var time = nowStr();
+        var html = '<div class="msg-row user">' +
+            '<div class="bubble-icon user-icon">🙋</div>' +
+            '<div class="bubble user-bubble">' + escHtml(text) +
+            '<div class="ts">' + time + '</div></div></div>';
+        $('#chatBody').append(html);
+        scrollBottom();
+    }
+
+    // ---- 工具 ----
+
+    function setWaiting(v) {
+        isWaiting = v;
+        $('#sendBtn').prop('disabled', v);
+    }
+
+    function scrollBottom() {
+        var el = document.getElementById('chatBody');
+        el.scrollTop = el.scrollHeight;
+    }
+
+    function nowStr() {
+        var d = new Date();
+        return pad(d.getHours()) + ':' + pad(d.getMinutes());
+    }
+
+    function pad(n) { return n < 10 ? '0' + n : '' + n; }
+
+    function escHtml(s) {
+        return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+                .replace(/"/g,'&quot;').replace(/\n/g,'<br/>');
+    }
+</script>
+</body>
+</html>
