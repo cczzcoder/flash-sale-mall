@@ -1,8 +1,13 @@
 package com.lijs.seckill.domain;
 
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
+
+@TableName("t_user")
 public class User {
-    private int id;
-    private String name;
+    @TableId(type = IdType.INPUT)
+    private int id;    private String name;
 
     public User() {
     }

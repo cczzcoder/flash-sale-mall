@@ -34,26 +34,24 @@ public class OrderService {
     }
 
     /**
-     * 生成订单同时写入到缓存
+     * 生成订单同时写入到缓存。
+     * MP 的 insert() 执行后会将数据库自增主键回填到 orderInfo.id，
+     * 无需再额外查询一次 order_info 表。
      */
     @Transactional
     public OrderInfo createCacheOrder(SeckillUser user, GoodsVo goodsVo) {
-        // 1.生成订单
+        // 1.生成 order_info 订单，MP insert 后 id 自动回填
         OrderInfo orderInfo = buildOrder(goodsVo.getId(), goodsVo.getSeckillPrice(), user.getId());
-        // 2.缓存orderId
-        long orderId = orderDao.insert(orderInfo);
+        orderDao.insert(orderInfo);
+        long orderId = orderInfo.getId();
         logger.info("orderId:{}", orderId);
-        OrderInfo queryOrder = orderDao.selectorderInfo(user.getId(), goodsVo.getId());
-        long queryOrderId = queryOrder.getId();
-        logger.info("queryOrderId:{}", queryOrderId);
         // 2.生成秒杀订单 seckill_order
         SeckillOrder seckillOrder = new SeckillOrder();
         seckillOrder.setGoodsId(goodsVo.getId());
-        // 3.将订单id传给秒杀订单里面的订单 orderId
-        seckillOrder.setOrderId(queryOrderId);
+        seckillOrder.setOrderId(orderId);
         seckillOrder.setUserId(user.getId());
         orderDao.insertSeckillOrder(seckillOrder);
-        // 4.设置缓存数据（key:用户ID_商品ID value:订单）
+        // 3.设置缓存数据（key:用户ID_商品ID value:秒杀订单）
         redisService.set(OrderKey.getSeckillOrderByUidAndGid, user.getId() + "_" + goodsVo.getId(), seckillOrder);
         return orderInfo;
     }
