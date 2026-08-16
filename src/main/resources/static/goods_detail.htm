@@ -94,7 +94,17 @@
         });
     }
 
+    // 轮询退避参数：首次 200ms，每次 ×1.5，封顶 3s；累计约 60s 后放弃。
+    // 原实现为固定 50ms 无上限重试，消息进死信队列时单个用户会以 20QPS 永久空转。
+    var POLL_INTERVAL_INIT = 200, POLL_INTERVAL_MAX = 3000, POLL_TIMEOUT_MS = 60000;
+    var pollInterval, pollDeadline;
+
     function getSeckillResult(goodsId) {
+        // 首次调用初始化退避状态
+        if (pollInterval === undefined) {
+            pollInterval = POLL_INTERVAL_INIT;
+            pollDeadline = Date.now() + POLL_TIMEOUT_MS;
+        }
         $.ajax({
             url: "/seckill/result", type: "GET",
             data: { goodsId: $("#goodsId").val() },
@@ -102,19 +112,38 @@
                 if (data.code == 0) {
                     var result = data.data;
                     if (result < 0) {
+                        resetPoll();
                         layer.msg("抱歉，秒杀失败!");
                     } else if (result == 0) {
-                        setTimeout(function () { getSeckillResult(goodsId); }, 50);
+                        if (Date.now() >= pollDeadline) {
+                            resetPoll();
+                            layer.msg("排队超时，请稍后在订单列表中确认结果");
+                            return;
+                        }
+                        setTimeout(function () { getSeckillResult(goodsId); }, pollInterval);
+                        // 指数退避，避免大量用户同时高频轮询压垮服务端
+                        pollInterval = Math.min(Math.floor(pollInterval * 1.5), POLL_INTERVAL_MAX);
                         layer.msg(data.msg);
                     } else {
+                        resetPoll();
                         layer.confirm("恭喜你，秒杀成功！查看订单？", { btn: ["确定","取消"] },
                             function () { window.location.href = "order_detail.htm?orderId=" + result; },
                             function () { layer.closeAll(); });
                     }
-                } else { layer.msg(data.msg); }
+                } else {
+                    // 含服务端限流（达到访问限制次数），停止轮询避免雪上加霜
+                    resetPoll();
+                    layer.msg(data.msg);
+                }
             },
-            error: function () { layer.msg("请求有误！"); }
+            error: function () { resetPoll(); layer.msg("请求有误！"); }
         });
+    }
+
+    // 轮询结束后清空状态，使下一次秒杀重新从初始间隔开始
+    function resetPoll() {
+        pollInterval = undefined;
+        pollDeadline = undefined;
     }
 
     function doSeckill(path) {
@@ -122,7 +151,7 @@
             url: "/seckill/" + path + "/seckillWithCacheAndMQ", type: "POST",
             data: { goodsId: $("#goodsId").val() },
             success: function (data) {
-                if (data.code == 0) { getSeckillResult($("#goodsId").val()); }
+                if (data.code == 0) { resetPoll(); getSeckillResult($("#goodsId").val()); }
                 else { layer.msg(data.msg); }
             },
             error: function () { layer.msg("请求有误！"); }

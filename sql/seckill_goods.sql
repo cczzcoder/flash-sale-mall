@@ -8,7 +8,10 @@ CREATE TABLE `seckill_goods` (
                                  `version` INT NOT NULL DEFAULT 0 COMMENT '版本号，防止并发超卖',
                                  `start_date` datetime DEFAULT NULL COMMENT '秒杀开始时间',
                                  `end_date` datetime DEFAULT NULL COMMENT '秒杀结束时间',
-                                 PRIMARY KEY (`id`)
+                                 PRIMARY KEY (`id`),
+                                 -- 扣库存 SQL 的 WHERE 条件走此索引。缺失时 UPDATE 会全表扫描，
+                                 -- RR 隔离级别下扫过的每一行都加 next-key lock，导致不同商品互相阻塞。
+                                 UNIQUE KEY `uk_goods_id` (`goods_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='秒杀商品表';
 
 INSERT INTO `seckill_goods` VALUES ('1', '1', '0.01', '9', 0, '2019-05-28 11:10:12', '2019-05-31 15:50:59');

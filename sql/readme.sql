@@ -11,3 +11,12 @@ CREATE DATABASE seckill CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
 -- 2.6、执行创建秒杀订单表 seckill_order.sql
 
 -- 3、执行完毕
+
+-- 4、已有数据库的增量升级（首次全新建表可跳过）
+-- 4.1、seckill_goods.goods_id 补唯一索引，避免扣库存 UPDATE 全表扫描加锁
+--      若报 Duplicate entry，说明存在重复 goods_id 记录，需先清理再执行
+ALTER TABLE `seckill_goods` ADD UNIQUE KEY `uk_goods_id` (`goods_id`);
+
+-- 4.2、order_info 补查询索引（原表仅有主键，两条查询均为全表扫描）
+ALTER TABLE `order_info` ADD KEY `idx_user_goods` (`user_id`,`goods_id`);
+ALTER TABLE `order_info` ADD KEY `idx_user_create` (`user_id`,`create_date`);

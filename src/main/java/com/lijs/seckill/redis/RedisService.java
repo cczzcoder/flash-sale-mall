@@ -262,6 +262,40 @@ public class RedisService {
         }
     }
 
+    /**
+     * 库存对账：仅当 Redis 当前值等于 expect 时才写入 newValue。
+     *
+     * <p>比较与写入通过 Lua 原子执行。若期间有秒杀请求扣减了库存，
+     * 当前值不再等于 expect，写入被放弃，本轮对账跳过——宁可少修一次，
+     * 也不能用一个已经过期的快照覆盖掉真实扣减。
+     *
+     * @return true 表示成功修正，false 表示值已变化（有并发扣减）或 key 不存在
+     */
+    public boolean compareAndSetStock(KeyPrefix prefix, String key, long expect, long newValue) {
+        Jedis jedis = null;
+        try {
+            jedis = jedisPool.getResource();
+            String realKey = prefix.getPrefix() + key;
+
+            // KEYS[1]=库存key, ARGV[1]=期望值, ARGV[2]=修正值
+            // key 不存在时 GET 返回 false，tonumber(false) 为 nil，比较不成立，返回 0
+            String luaScript =
+                "local s = redis.call('GET', KEYS[1]) " +
+                "if s and tonumber(s) == tonumber(ARGV[1]) then " +
+                "    redis.call('SET', KEYS[1], ARGV[2]) " +
+                "    return 1 " +
+                "else " +
+                "    return 0 " +
+                "end";
+
+            Object r = jedis.eval(luaScript, 1, realKey,
+                    String.valueOf(expect), String.valueOf(newValue));
+            return r != null && ((Long) r) == 1L;
+        } finally {
+            close(jedis);
+        }
+    }
+
     // -------------------------------------------------------------------------
     // Redis List 操作（AI 对话历史）
     // -------------------------------------------------------------------------

@@ -12,7 +12,11 @@ CREATE TABLE `order_info` (
                               `order_status` tinyint(4) DEFAULT '0' COMMENT '订单状态',
                               `create_date` datetime DEFAULT NULL COMMENT '创建时间',
                               `pay_date` datetime DEFAULT NULL COMMENT '支付时间',
-                              PRIMARY KEY (`id`)
+                              PRIMARY KEY (`id`),
+                              -- selectOrderInfo 按 (user_id, goods_id) 查询
+                              KEY `idx_user_goods` (`user_id`,`goods_id`),
+                              -- selectRecentByUserId 按 user_id 过滤 + create_date 倒序取 N 条
+                              KEY `idx_user_create` (`user_id`,`create_date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='订单信息表';
 
 

@@ -12,6 +12,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.Date;
 
@@ -37,6 +39,9 @@ public class OrderService {
      * 生成订单同时写入到缓存。
      * MP 的 insert() 执行后会将数据库自增主键回填到 orderInfo.id，
      * 无需再额外查询一次 order_info 表。
+     *
+     * 注意：扣库存的行锁一直持有到事务提交，因此事务体内不做任何网络 IO。
+     * Redis 回写改挂在提交后执行，避免一次 Redis 往返被圈进行锁窗口。
      */
     @Transactional
     public OrderInfo createCacheOrder(SeckillUser user, GoodsVo goodsVo) {
@@ -51,9 +56,33 @@ public class OrderService {
         seckillOrder.setOrderId(orderId);
         seckillOrder.setUserId(user.getId());
         orderDao.insertSeckillOrder(seckillOrder);
-        // 3.设置缓存数据（key:用户ID_商品ID value:秒杀订单）
-        redisService.set(OrderKey.getSeckillOrderByUidAndGid, user.getId() + "_" + goodsVo.getId(), seckillOrder);
+        // 3.事务提交后再设置缓存（key:用户ID_商品ID value:秒杀订单）
+        cacheSeckillOrderAfterCommit(seckillOrder);
         return orderInfo;
+    }
+
+    /**
+     * 把秒杀订单的缓存回写推迟到事务提交之后。
+     * 事务回滚时不会执行，缓存不会出现 DB 里并不存在的订单。
+     * 若不在事务中（理论上不会发生）则退化为立即写入。
+     */
+    private void cacheSeckillOrderAfterCommit(SeckillOrder seckillOrder) {
+        String key = seckillOrder.getUserId() + "_" + seckillOrder.getGoodsId();
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            redisService.set(OrderKey.getSeckillOrderByUidAndGid, key, seckillOrder);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                // 缓存写失败不能反过来影响已提交的订单，兜底由 DB 唯一索引 u_uid_gid 保证
+                try {
+                    redisService.set(OrderKey.getSeckillOrderByUidAndGid, key, seckillOrder);
+                } catch (Exception e) {
+                    logger.error("秒杀订单缓存回写失败 key={}", key, e);
+                }
+            }
+        });
     }
 
     /**

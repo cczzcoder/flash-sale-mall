@@ -115,17 +115,8 @@ public class SeckillController implements InitializingBean {
         if (user == null) {
             return Result.error(ResultCode.SESSION_ERROR);
         }
-        // 限制访问次数
-        String uri = request.getRequestURI();
-        String key = uri + "_" + user.getId();
-        // 限定 key 5s 之内只能访问 5 次
-        Integer count = redisService.get(AccessKey.access, key, Integer.class);
-        if (count == null) {
-            redisService.set(AccessKey.access, key, 1);
-        } else if (count < 5) {
-            redisService.incr(AccessKey.access, key);
-        } else {
-            // 超过 5 次
+        // 限制访问次数：5s 之内最多 5 次
+        if (isAccessLimited(request, user, 5)) {
             return Result.error(ResultCode.ACCESS_LIMIT);
         }
         // 验证验证码
@@ -141,10 +132,33 @@ public class SeckillController implements InitializingBean {
     }
 
     /**
+     * 基于 Redis 的按【接口 + 用户】访问频率限制，窗口由 AccessKey.access 的 TTL（5s）决定。
+     *
+     * @param maxCount 窗口内允许的最大访问次数
+     * @return true 表示已超限，调用方应拒绝本次请求
+     */
+    private boolean isAccessLimited(HttpServletRequest request, SeckillUser user, int maxCount) {
+        String key = request.getRequestURI() + "_" + user.getId();
+        Integer count = redisService.get(AccessKey.access, key, Integer.class);
+        if (count == null) {
+            redisService.set(AccessKey.access, key, 1);
+            return false;
+        }
+        if (count < maxCount) {
+            redisService.incr(AccessKey.access, key);
+            return false;
+        }
+        return true;
+    }
+
+    /**
      * 轮询查看秒杀结果
      * 秒杀成功，返回订单的Id。
      * 库存不足直接返回-1。
      * 排队中则返回0。
+     *
+     * 前端已按指数退避轮询，此处再加服务端限流兜底：
+     * 前端被绕过或脚本刷接口时，避免海量轮询直接压垮 Redis。
      *
      * @param user    秒杀用户
      * @param goodsId 商品ID
@@ -152,7 +166,15 @@ public class SeckillController implements InitializingBean {
      */
     @RequestMapping(value = "/result", method = RequestMethod.GET)
     @ResponseBody
-    public Result<Long> result(SeckillUser user, @RequestParam(value = "goodsId", defaultValue = "0") long goodsId) {
+    public Result<Long> result(HttpServletRequest request, SeckillUser user,
+                               @RequestParam(value = "goodsId", defaultValue = "0") long goodsId) {
+        if (user == null) {
+            return Result.error(ResultCode.SESSION_ERROR);
+        }
+        // 5s 内最多 10 次：退避策略下正常用户远达不到，异常刷接口才会触发
+        if (isAccessLimited(request, user, 10)) {
+            return Result.error(ResultCode.ACCESS_LIMIT);
+        }
         long result = seckillService.getSeckillResult(user.getId(), goodsId);
         logger.info("轮询 result:{}", result);
         return Result.success(result);
@@ -182,17 +204,19 @@ public class SeckillController implements InitializingBean {
         if (!check) {
             return Result.error(ResultCode.REQUEST_ILLEGAL);
         }
-        // 3.Redis 原子预扣库存：DECR 后若结果 < 0 自动 INCR 回滚，防止库存永久为负
+        // 3.重复下单校验：必须放在预扣库存之前。
+        //   否则重复请求会扣掉 Redis 库存却直接 return，库存永久泄漏。
+        //   走缓存而非查库，热路径不打 DB；最终兜底是 seckill_order 的唯一索引 u_uid_gid。
+        SeckillOrder order = orderService.getSeckillOrderByUserIdAndGoodsIdCache(user.getId(), goodsId);
+        if (order != null) { // 重复下单
+            return Result.error(ResultCode.REPEAT_SECKILL);
+        }
+        // 4.Redis 原子预扣库存：DECR 后若结果 < 0 自动 INCR 回滚，防止库存永久为负
         boolean stockAvailable = redisService.preDecrStock(GoodsKey.getSeckillGoodsStock, "" + goodsId);
         if (!stockAvailable) {
             return Result.error(ResultCode.SECKILL_OVER_ERROR);
         }
-        // 5.判断这个秒杀订单形成没有，判断是否已经秒杀到了，避免一个账户秒杀多个商品
-        SeckillOrder order = orderService.getSeckillOrderByUserIdAndGoodsId(user.getId(), goodsId);
-        if (order != null) { // 重复下单
-            return Result.error(ResultCode.REPEAT_SECKILL);
-        }
-        // 6.正常请求入队；捕获 AmqpException（TCP 重试耗尽）时补偿 Redis 库存
+        // 5.正常请求入队；捕获 AmqpException（TCP 重试耗尽）时补偿 Redis 库存
         SeckillMessage mms = new SeckillMessage();
         mms.setUser(user);
         mms.setGoodsId(goodsId);

@@ -23,14 +23,18 @@ public interface GoodsDao extends BaseMapper<SeckillGoods> {
     GoodsVo getGoodsVoByGoodsId(@Param("goodsId") long goodsId);
 
     /**
-     * 原子性减库存：stock_count > 0 时才执行，利用数据库行锁防止超卖。
-     * TODO 可升级为乐观锁版本（version 字段）
+     * 原子性扣减库存：stock_count > 0 时才执行，靠 InnoDB 行锁防止超卖。
+     * 返回受影响行数，0 表示库存已耗尽，调用方据此判定失败，无需重试。
+     * 依赖 seckill_goods 上的 uk_goods_id 唯一索引，否则退化为全表扫描并锁全表。
      */
     @Update("update seckill_goods set stock_count = stock_count - 1" +
             " where goods_id = #{goodsId} and stock_count > 0")
     int reduceStock(SeckillGoods goods);
 
-    @Update("update seckill_goods set stock_count = stock_count - 1" +
-            " where goods_id = #{goodsId} and stock_count > 0")
-    int reduceStockLock(SeckillGoods goods);
+    /**
+     * 对账用：读取所有秒杀商品的 goods_id 与当前 DB 库存。
+     * 只取对账需要的两列，避免 JOIN goods 表。
+     */
+    @Select("select goods_id, stock_count from seckill_goods")
+    List<SeckillGoods> listStockForReconcile();
 }
