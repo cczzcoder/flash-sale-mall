@@ -1,0 +1,129 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "HTTP probe availability",
+      "description": "Synthetic outside-in availability from Blackbox Exporter.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "avg_over_time(probe_success{job=\"seckill-blackbox\",instance=~\"$target\"}[$__rate_interval])", "legendFormat": "{{instance}}", "refId": "A"}],
+      "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "orange", "value": 0.99}, {"color": "green", "value": 0.999}]}}, "overrides": []},
+      "options": {"colorMode": "background", "graphMode": "area", "justifyMode": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}},
+      "gridPos": {"h": 5, "w": 12, "x": 0, "y": 0}
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Application scrape",
+      "description": "Prometheus reachability of the application Actuator endpoint.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "max(up{job=\"seckill-app\",instance=~\"$app_instance\"})", "legendFormat": "{{instance}}", "refId": "A"}],
+      "fieldConfig": {"defaults": {"unit": "short", "min": 0, "max": 1, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}}, "overrides": []},
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}},
+      "gridPos": {"h": 5, "w": 12, "x": 12, "y": 0}
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Synthetic HTTP latency",
+      "description": "End-to-end probe latency. This is separate from load-test request latency.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "probe_duration_seconds{job=\"seckill-blackbox\",instance=~\"$target\"}", "legendFormat": "{{instance}}", "refId": "A"}],
+      "fieldConfig": {"defaults": {"unit": "s", "custom": {"drawStyle": "line", "lineWidth": 2, "fillOpacity": 8, "showPoints": "auto"}}, "overrides": []},
+      "options": {"legend": {"displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"]}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 5}
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Application request rate",
+      "description": "Server-side request rate by normalized route and HTTP status.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "sum by (uri, status) (rate(http_server_requests_seconds_count{job=\"seckill-app\",instance=~\"$app_instance\"}[$__rate_interval]))", "legendFormat": "{{uri}} {{status}}", "refId": "A"}],
+      "fieldConfig": {"defaults": {"unit": "reqps", "custom": {"drawStyle": "line", "lineWidth": 2, "fillOpacity": 8, "showPoints": "auto"}}, "overrides": []},
+      "options": {"legend": {"displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"]}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 13}
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Application p95 latency",
+      "description": "Server-side p95 from HTTP request histogram buckets.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "histogram_quantile(0.95, sum by (le, uri) (rate(http_server_requests_seconds_bucket{job=\"seckill-app\",instance=~\"$app_instance\"}[$__rate_interval])))", "legendFormat": "{{uri}}", "refId": "A"}],
+      "fieldConfig": {"defaults": {"unit": "s", "custom": {"drawStyle": "line", "lineWidth": 2, "fillOpacity": 8, "showPoints": "auto"}}, "overrides": []},
+      "options": {"legend": {"displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"]}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 21}
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Mock payment callbacks",
+      "description": "Application counter by callback outcome. Provider is MOCK by contract.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "sum by (outcome) (rate(payment_callback_total{job=\"seckill-app\",instance=~\"$app_instance\"}[$__rate_interval]))", "legendFormat": "{{outcome}}", "refId": "A"}],
+      "fieldConfig": {"defaults": {"unit": "ops", "custom": {"drawStyle": "line", "lineWidth": 2, "fillOpacity": 8, "showPoints": "auto"}}, "overrides": []},
+      "options": {"legend": {"displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "sum"]}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 29}
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Order timeout close outcomes",
+      "description": "Application counter for closed, skipped, and Redis restore error outcomes.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "sum by (outcome) (rate(order_timeout_close_total{job=\"seckill-app\",instance=~\"$app_instance\"}[$__rate_interval]))", "legendFormat": "{{outcome}}", "refId": "A"}],
+      "fieldConfig": {"defaults": {"unit": "ops", "custom": {"drawStyle": "line", "lineWidth": 2, "fillOpacity": 8, "showPoints": "auto"}}, "overrides": []},
+      "options": {"legend": {"displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "sum"]}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 37}
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "RabbitMQ queue depth",
+      "description": "Ready messages for the seckill queue and dead-letter queue. A negative value means the query failed.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "seckill_rabbit_queue_depth{job=\"seckill-app\",instance=~\"$app_instance\"}", "legendFormat": "{{queue}}", "refId": "A"}],
+      "fieldConfig": {"defaults": {"unit": "short", "custom": {"drawStyle": "line", "lineWidth": 2, "fillOpacity": 8, "showPoints": "auto"}}, "overrides": []},
+      "options": {"legend": {"displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"]}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 45}
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Synthetic HTTP phases",
+      "description": "DNS, connect, processing, and transfer phases from Blackbox Exporter.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "probe_http_duration_seconds{job=\"seckill-blackbox\",instance=~\"$target\"}", "legendFormat": "{{phase}} {{instance}}", "refId": "A"}],
+      "fieldConfig": {"defaults": {"unit": "s", "custom": {"drawStyle": "line", "lineWidth": 2, "fillOpacity": 0, "showPoints": "auto"}}, "overrides": []},
+      "options": {"legend": {"displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"]}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 53}
+    },
+    {
+      "id": 9,
+      "type": "table",
+      "title": "Current scrape state",
+      "description": "Current Prometheus target state, including the application metrics endpoint.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "up", "format": "table", "instant": true, "refId": "A"}],
+      "fieldConfig": {"defaults": {}, "overrides": []},
+      "options": {"showHeader": true, "cellHeight": "sm"},
+      "gridPos": {"h": 7, "w": 24, "x": 0, "y": 61}
+    }
+  ],
+  "refresh": "15s",
+  "schemaVersion": 41,
+  "tags": ["seckill", "blackbox", "application", "rabbitmq"],
+  "templating": {"list": [
+    {"name": "target", "label": "HTTP target", "type": "query", "datasource": {"type": "prometheus", "uid": "prometheus"}, "query": {"query": "label_values(probe_success{job=\"seckill-blackbox\"}, instance)", "refId": "PrometheusVariableQueryEditor-target"}, "includeAll": true, "allValue": ".*", "multi": true, "refresh": 1, "current": {"text": "All", "value": "$__all"}},
+    {"name": "app_instance", "label": "Application", "type": "query", "datasource": {"type": "prometheus", "uid": "prometheus"}, "query": {"query": "label_values(up{job=\"seckill-app\"}, instance)", "refId": "PrometheusVariableQueryEditor-app"}, "includeAll": true, "allValue": ".*", "multi": true, "refresh": 1, "current": {"text": "All", "value": "$__all"}}
+  ]},
+  "time": {"from": "now-1h", "to": "now"},
+  "timezone": "browser",
+  "title": "Seckill observability",
+  "uid": "seckill-overview",
+  "version": 2
+}

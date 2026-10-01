@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jmeterTestPlan version="1.2" properties="5.0" jmeter="5.6.3">
+  <hashTree>
+    <TestPlan guiclass="TestPlanGui" testclass="TestPlan" testname="Seckill practical flow">
+      <boolProp name="TestPlan.functional_mode">false</boolProp>
+      <boolProp name="TestPlan.serialize_threadgroups">false</boolProp>
+      <elementProp name="TestPlan.user_defined_variables" elementType="Arguments">
+        <collectionProp name="Arguments.arguments">
+          <elementProp name="baseUrl" elementType="Argument"><stringProp name="Argument.name">baseUrl</stringProp><stringProp name="Argument.value">${__P(baseUrl,http://localhost:8080)}</stringProp><stringProp name="Argument.metadata">=</stringProp></elementProp>
+          <elementProp name="runSeckill" elementType="Argument"><stringProp name="Argument.name">runSeckill</stringProp><stringProp name="Argument.value">${__P(runSeckill,false)}</stringProp><stringProp name="Argument.metadata">=</stringProp></elementProp>
+          <elementProp name="runMockPayment" elementType="Argument"><stringProp name="Argument.name">runMockPayment</stringProp><stringProp name="Argument.value">${__P(runMockPayment,false)}</stringProp><stringProp name="Argument.metadata">=</stringProp></elementProp>
+        </collectionProp>
+      </elementProp>
+    </TestPlan>
+    <hashTree>
+      <CSVDataSet guiclass="TestBeanGUI" testclass="CSVDataSet" testname="Per-user parameters">
+        <stringProp name="filename">${__P(usersFile,load-test/jmeter/users.csv)}</stringProp>
+        <stringProp name="fileEncoding">UTF-8</stringProp>
+        <stringProp name="variableNames">mobile,password,goodsId,seckillPath,orderId,deliveryAddrId</stringProp>
+        <stringProp name="delimiter">,</stringProp>
+        <boolProp name="quotedData">true</boolProp>
+        <boolProp name="ignoreFirstLine">true</boolProp>
+        <boolProp name="recycle">false</boolProp>
+        <boolProp name="stopThread">true</boolProp>
+        <stringProp name="shareMode">shareMode.all</stringProp>
+      </CSVDataSet>
+      <hashTree/>
+      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="Authenticated shoppers">
+        <stringProp name="ThreadGroup.num_threads">${__P(threads,10)}</stringProp>
+        <stringProp name="ThreadGroup.ramp_time">${__P(rampSeconds,10)}</stringProp>
+        <boolProp name="ThreadGroup.same_user_on_next_iteration">true</boolProp>
+        <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" testname="Loop Controller">
+          <stringProp name="LoopController.loops">${__P(loops,1)}</stringProp>
+          <boolProp name="LoopController.continue_forever">false</boolProp>
+        </elementProp>
+      </ThreadGroup>
+      <hashTree>
+        <CookieManager guiclass="CookiePanel" testclass="CookieManager" testname="Cookie manager"><collectionProp name="CookieManager.cookies"/><boolProp name="CookieManager.clearEachIteration">false</boolProp></CookieManager>
+        <hashTree/>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="01 Login and issue token">
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments"><collectionProp name="Arguments.arguments">
+            <elementProp name="mobile" elementType="HTTPArgument"><boolProp name="HTTPArgument.always_encode">true</boolProp><stringProp name="Argument.name">mobile</stringProp><stringProp name="Argument.value">${mobile}</stringProp><stringProp name="Argument.metadata">=</stringProp><boolProp name="HTTPArgument.use_equals">true</boolProp></elementProp>
+            <elementProp name="password" elementType="HTTPArgument"><boolProp name="HTTPArgument.always_encode">true</boolProp><stringProp name="Argument.name">password</stringProp><stringProp name="Argument.value">${password}</stringProp><stringProp name="Argument.metadata">=</stringProp><boolProp name="HTTPArgument.use_equals">true</boolProp></elementProp>
+          </collectionProp></elementProp>
+          <stringProp name="HTTPSampler.path">${baseUrl}/login/token_test</stringProp><stringProp name="HTTPSampler.method">POST</stringProp><boolProp name="HTTPSampler.follow_redirects">true</boolProp><boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <JSONPostProcessor guiclass="JSONPostProcessorGui" testclass="JSONPostProcessor" testname="Extract raw token"><stringProp name="JSONPostProcessor.referenceNames">token</stringProp><stringProp name="JSONPostProcessor.jsonPathExprs">$.data</stringProp><stringProp name="JSONPostProcessor.match_numbers">1</stringProp><stringProp name="JSONPostProcessor.defaultValues">NOT_FOUND</stringProp></JSONPostProcessor>
+          <hashTree/>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Login business success"><collectionProp name="Asserion.test_strings"><stringProp name="assertion_code">&quot;code&quot;:0</stringProp></collectionProp><stringProp name="Assertion.test_field">Assertion.response_data</stringProp><boolProp name="Assertion.assume_success">false</boolProp><intProp name="Assertion.test_type">16</intProp></ResponseAssertion>
+          <hashTree/>
+        </hashTree>
+        <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="Raw token authentication">
+          <collectionProp name="HeaderManager.headers"><elementProp name="" elementType="Header"><stringProp name="Header.name">Authorization</stringProp><stringProp name="Header.value">${token}</stringProp></elementProp></collectionProp>
+        </HeaderManager>
+        <hashTree/>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="02 Goods detail JSON">
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments"><collectionProp name="Arguments.arguments"/></elementProp><stringProp name="HTTPSampler.path">${baseUrl}/goods/detailStatic/${goodsId}</stringProp><stringProp name="HTTPSampler.method">GET</stringProp><boolProp name="HTTPSampler.follow_redirects">true</boolProp><boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+        </HTTPSamplerProxy>
+        <hashTree><ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Goods detail success"><collectionProp name="Asserion.test_strings"><stringProp name="assertion_code">&quot;code&quot;:0</stringProp></collectionProp><stringProp name="Assertion.test_field">Assertion.response_data</stringProp><intProp name="Assertion.test_type">16</intProp></ResponseAssertion><hashTree/></hashTree>
+        <IfController guiclass="IfControllerPanel" testclass="IfController" testname="03 Seckill with pre-issued path only"><stringProp name="IfController.condition">${__groovy(vars.get('runSeckill') == 'true' &amp;&amp; vars.get('seckillPath')?.trim())}</stringProp><boolProp name="IfController.evaluateAll">false</boolProp></IfController>
+        <hashTree>
+          <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="03a Submit seckill request"><elementProp name="HTTPsampler.Arguments" elementType="Arguments"><collectionProp name="Arguments.arguments"><elementProp name="goodsId" elementType="HTTPArgument"><boolProp name="HTTPArgument.always_encode">true</boolProp><stringProp name="Argument.name">goodsId</stringProp><stringProp name="Argument.value">${goodsId}</stringProp><stringProp name="Argument.metadata">=</stringProp><boolProp name="HTTPArgument.use_equals">true</boolProp></elementProp><elementProp name="deliveryAddrId" elementType="HTTPArgument"><boolProp name="HTTPArgument.always_encode">true</boolProp><stringProp name="Argument.name">deliveryAddrId</stringProp><stringProp name="Argument.value">${deliveryAddrId}</stringProp><stringProp name="Argument.metadata">=</stringProp><boolProp name="HTTPArgument.use_equals">true</boolProp></elementProp></collectionProp></elementProp><stringProp name="HTTPSampler.path">${baseUrl}/seckill/${seckillPath}/seckillWithCacheAndMQ</stringProp><stringProp name="HTTPSampler.method">POST</stringProp><boolProp name="HTTPSampler.follow_redirects">true</boolProp><boolProp name="HTTPSampler.use_keepalive">true</boolProp></HTTPSamplerProxy>
+          <hashTree><JSR223Assertion guiclass="TestBeanGUI" testclass="JSR223Assertion" testname="Accepted or expected business result"><stringProp name="scriptLanguage">groovy</stringProp><stringProp name="parameters"></stringProp><stringProp name="filename"></stringProp><stringProp name="cacheKey">true</stringProp><stringProp name="script"><![CDATA[def body = new groovy.json.JsonSlurper().parseText(prev.getResponseDataAsString()); def code = body.code as Integer; if (!(code == 0 || code == 500500)) { AssertionResult.setFailure(true); AssertionResult.setFailureMessage("Unexpected business code: " + code) }]]></stringProp></JSR223Assertion><hashTree/></hashTree>
+          <ConstantTimer guiclass="ConstantTimerGui" testclass="ConstantTimer" testname="Initial result delay"><stringProp name="ConstantTimer.delay">${__P(resultDelayMs,500)}</stringProp></ConstantTimer><hashTree/>
+          <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="03b Poll seckill result once"><elementProp name="HTTPsampler.Arguments" elementType="Arguments"><collectionProp name="Arguments.arguments"><elementProp name="goodsId" elementType="HTTPArgument"><boolProp name="HTTPArgument.always_encode">true</boolProp><stringProp name="Argument.name">goodsId</stringProp><stringProp name="Argument.value">${goodsId}</stringProp><stringProp name="Argument.metadata">=</stringProp><boolProp name="HTTPArgument.use_equals">true</boolProp></elementProp></collectionProp></elementProp><stringProp name="HTTPSampler.path">${baseUrl}/seckill/result</stringProp><stringProp name="HTTPSampler.method">GET</stringProp><boolProp name="HTTPSampler.follow_redirects">true</boolProp><boolProp name="HTTPSampler.use_keepalive">true</boolProp></HTTPSamplerProxy>
+          <hashTree><ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Result endpoint business success"><collectionProp name="Asserion.test_strings"><stringProp name="assertion_code">&quot;code&quot;:0</stringProp></collectionProp><stringProp name="Assertion.test_field">Assertion.response_data</stringProp><intProp name="Assertion.test_type">16</intProp></ResponseAssertion><hashTree/></hashTree>
+        </hashTree>
+        <IfController guiclass="IfControllerPanel" testclass="IfController" testname="04 Mock payment create only"><stringProp name="IfController.condition">${__groovy(vars.get('runMockPayment') == 'true' &amp;&amp; vars.get('orderId')?.trim())}</stringProp><boolProp name="IfController.evaluateAll">false</boolProp></IfController>
+        <hashTree>
+          <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="04a Create MOCK payment"><elementProp name="HTTPsampler.Arguments" elementType="Arguments"><collectionProp name="Arguments.arguments"><elementProp name="orderId" elementType="HTTPArgument"><boolProp name="HTTPArgument.always_encode">true</boolProp><stringProp name="Argument.name">orderId</stringProp><stringProp name="Argument.value">${orderId}</stringProp><stringProp name="Argument.metadata">=</stringProp><boolProp name="HTTPArgument.use_equals">true</boolProp></elementProp></collectionProp></elementProp><stringProp name="HTTPSampler.path">${baseUrl}/payment/mock/create</stringProp><stringProp name="HTTPSampler.method">POST</stringProp><boolProp name="HTTPSampler.follow_redirects">true</boolProp><boolProp name="HTTPSampler.use_keepalive">true</boolProp></HTTPSamplerProxy>
+          <hashTree><ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Mock payment create success"><collectionProp name="Asserion.test_strings"><stringProp name="assertion_code">&quot;code&quot;:0</stringProp></collectionProp><stringProp name="Assertion.test_field">Assertion.response_data</stringProp><intProp name="Assertion.test_type">16</intProp></ResponseAssertion><hashTree/></hashTree>
+        </hashTree>
+      </hashTree>
+    </hashTree>
+  </hashTree>
+</jmeterTestPlan>

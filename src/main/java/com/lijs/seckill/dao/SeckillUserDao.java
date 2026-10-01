@@ -15,6 +15,6 @@ public interface SeckillUserDao extends BaseMapper<SeckillUser> {
     SeckillUser getById(@Param("id") long id);
 
     // 只更新 pwd 字段；如需全字段更新可改用 BaseMapper.updateById()
-    @Update("update seckill_user set pwd=#{pwd} where id=#{id}")
-    void update(SeckillUser updateUser);
+    @Update("update seckill_user set pwd=#{pwd}, salt=#{salt} where id=#{id}")
+    int updatePassword(SeckillUser updateUser);
 }

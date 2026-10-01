@@ -1,10 +1,13 @@
 package com.lijs.seckill.service;
 
 import com.lijs.seckill.vo.GoodsVo;
+import com.lijs.seckill.dao.DeliveryAddressDao;
+import com.lijs.seckill.domain.DeliveryAddress;
 import com.lijs.seckill.dao.OrderDao;
 import com.lijs.seckill.domain.SeckillOrder;
 import com.lijs.seckill.domain.SeckillUser;
 import com.lijs.seckill.domain.OrderInfo;
+import com.lijs.seckill.domain.OrderStatus;
 import com.lijs.seckill.redis.OrderKey;
 import com.lijs.seckill.redis.RedisService;
 import org.slf4j.Logger;
@@ -16,6 +19,7 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.Date;
+import java.util.List;
 
 @Service
 public class OrderService {
@@ -26,6 +30,8 @@ public class OrderService {
     private OrderDao orderDao;
     @Autowired
     private RedisService redisService;
+    @Autowired
+    private DeliveryAddressDao deliveryAddressDao;
 
     /**
      * 判断是否秒杀到某商品，即去seckill_order里面去查找是否有记录userId和goodsId的一条数据。
@@ -36,17 +42,18 @@ public class OrderService {
     }
 
     /**
-     * 生成订单同时写入到缓存。
-     * MP 的 insert() 执行后会将数据库自增主键回填到 orderInfo.id，
-     * 无需再额外查询一次 order_info 表。
-     *
-     * 注意：扣库存的行锁一直持有到事务提交，因此事务体内不做任何网络 IO。
-     * Redis 回写改挂在提交后执行，避免一次 Redis 往返被圈进行锁窗口。
+     * 生成订单（含商品名版，供 createCacheOrder / createOrderWithoutCache 调用）
      */
     @Transactional
     public OrderInfo createCacheOrder(SeckillUser user, GoodsVo goodsVo) {
+        return createCacheOrder(user, goodsVo, null);
+    }
+
+    @Transactional
+    public OrderInfo createCacheOrder(SeckillUser user, GoodsVo goodsVo, Long deliveryAddrId) {
         // 1.生成 order_info 订单，MP insert 后 id 自动回填
-        OrderInfo orderInfo = buildOrder(goodsVo.getId(), goodsVo.getSeckillPrice(), user.getId());
+        OrderInfo orderInfo = buildOrder(goodsVo.getId(), goodsVo.getGoodsName(),
+                goodsVo.getSeckillPrice(), user.getId(), deliveryAddrId);
         orderDao.insert(orderInfo);
         long orderId = orderInfo.getId();
         logger.info("orderId:{}", orderId);
@@ -98,8 +105,14 @@ public class OrderService {
      */
     @Transactional
     public OrderInfo createOrderWithoutCache(SeckillUser user, GoodsVo goodsVo) {
-        // 1.生成订单order_info
-        OrderInfo orderInfo = buildOrder(goodsVo.getId(), goodsVo.getSeckillPrice(), user.getId());
+        return createOrderWithoutCache(user, goodsVo, null);
+    }
+
+    @Transactional
+    public OrderInfo createOrderWithoutCache(SeckillUser user, GoodsVo goodsVo, Long deliveryAddrId) {
+        // 1.生成订单order_info（含商品名，保证 order_info.goods_name 不为 null）
+        OrderInfo orderInfo = buildOrder(goodsVo.getId(), goodsVo.getGoodsName(),
+                goodsVo.getSeckillPrice(), user.getId(), deliveryAddrId);
         orderDao.insert(orderInfo);
         // 2.生成秒杀订单seckill_order
         SeckillOrder seckillOrder = new SeckillOrder();
@@ -111,23 +124,39 @@ public class OrderService {
         return orderInfo;
     }
 
-    private OrderInfo buildOrder(Long goodsId, Double seckillPrice, Long userId) {
+    private OrderInfo buildOrder(Long goodsId, String goodsName, Double seckillPrice,
+                                 Long userId, Long deliveryAddrId) {
         OrderInfo orderInfo = new OrderInfo();
-        orderInfo.setDeliveryAddrId(0L);
+        DeliveryAddress address = deliveryAddrId == null
+                ? deliveryAddressDao.selectDefault(userId)
+                : deliveryAddressDao.selectOwned(deliveryAddrId, userId);
+        if (address == null) {
+            throw new IllegalStateException("delivery address is required");
+        }
+        orderInfo.setDeliveryAddrId(address.getId());
+        orderInfo.setDeliveryReceiverName(address.getReceiverName());
+        orderInfo.setDeliveryReceiverMobile(address.getReceiverMobile());
+        orderInfo.setDeliveryAddress(address.getProvince() + address.getCity()
+                + address.getDistrict() + address.getDetail());
         orderInfo.setCreateDate(new Date());
         orderInfo.setGoodsCount(1);
         orderInfo.setGoodsId(goodsId);
+        orderInfo.setGoodsName(goodsName);   // 补填商品名，避免 order_info.goods_name 永远为 null
         // 秒杀价格
         orderInfo.setGoodsPrice(seckillPrice);
         orderInfo.setOrderChannel(1);
         // 订单状态  0-新建未支付  1-已支付  2-已发货  3-已收货
-        orderInfo.setOrderStatus(0);
+        orderInfo.setOrderStatus(OrderStatus.UNPAID.getCode());
         orderInfo.setUserId(userId);
         return orderInfo;
     }
 
     public OrderInfo getOrderByOrderId(long orderId) {
         return orderDao.getOrderByOrderId(orderId);
+    }
+
+    public List<OrderInfo> listByUserId(long userId, int limit) {
+        return orderDao.selectRecentByUserId(userId, limit);
     }
 
 }

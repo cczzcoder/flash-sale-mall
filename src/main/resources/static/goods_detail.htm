@@ -4,7 +4,7 @@
     <meta charset="UTF-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>闪惠智购商城 — 商品详情</title>
-    <script src="/jquery-validation/lib/jquery-1.11.1.js"></script>
+    <script src="/jquery-validation/lib/jquery-1.11.1.js"></script><script src="/js/csrf.js"></script>
     <link  rel="stylesheet" href="/bootstrap/css/bootstrap.css"/>
     <script src="/bootstrap/js/bootstrap.min.js"></script>
     <script src="/layer/layer.js"></script>
@@ -23,7 +23,8 @@
                      overflow:hidden;display:flex;flex-wrap:wrap;}
         .thumb-col{width:320px;background:linear-gradient(135deg,#f5f5f5,#ececec);
                    display:flex;align-items:center;justify-content:center;
-                   font-size:96px;min-height:280px;flex-shrink:0;}
+                   font-size:96px;min-height:280px;flex-shrink:0;overflow:hidden;}
+        .thumb-col img{width:100%;height:100%;object-fit:cover;}
         .info-col{flex:1;padding:28px;min-width:260px;}
         .goods-title{font-size:20px;font-weight:700;color:#222;margin-bottom:16px;line-height:1.4;}
         .price-block{background:#fff8f8;border-radius:10px;padding:14px 18px;
@@ -52,13 +53,13 @@
 <body>
 <div class="topbar">
     <a class="brand" href="/goods/list">⚡ 闪惠<span class="accent">智购</span>商城</a>
-    <a class="back" href="/goods/list">← 返回列表</a>
+    <div style="display:flex;gap:18px;align-items:center"><a class="back" href="/order_list.htm">我的订单</a><a class="back" href="/goods/list">← 返回列表</a></div>
 </div>
 <div class="wrap">
     <span id="userTip">您还没有登录，请<a href="/login/index" style="color:#e74c3c;font-weight:600;">点此登录</a>后参与秒杀</span>
     <input type="hidden" id="goodsId"/>
     <div class="detail-card">
-        <div class="thumb-col">🛍️</div>
+        <div class="thumb-col"><span id="goodsPlaceholder">🛍️</span><img id="goodsImage" style="display:none" alt="商品图片"/></div>
         <div class="info-col">
             <div class="goods-title" id="goodsName">加载中...</div>
             <div class="price-block">
@@ -67,6 +68,10 @@
             </div>
             <div class="meta-row"><span class="lbl">库存</span><span id="stockCount">—</span> 件</div>
             <div class="meta-row"><span class="lbl">开抢时间</span><span id="startTime">—</span></div>
+            <div class="meta-row"><span class="lbl">收货地址</span>
+                <select id="addressSelect" disabled><option value="">请先登录并设置地址</option></select>
+                <a href="/address.htm" style="margin-left:8px;color:#e74c3c;font-size:12px;">管理</a>
+            </div>
             <div id="seckillTip" class="countdown-box">加载中...</div>
             <input type="hidden" id="remainingSeconds"/>
             <div class="vcode-row">
@@ -76,149 +81,211 @@
             <button class="btn-seckill" type="button" id="buyButton" onclick="getSeckillPath()">⚡ 立即秒杀</button>
         </div>
     </div>
-    <img id="goodsImg" style="display:none"/>
 </div>
 <script type="text/javascript">
+    var SESSION_ERROR = 500210;
+    var POLL_INTERVAL_INIT = 200, POLL_INTERVAL_MAX = 3000, POLL_TIMEOUT_MS = 60000;
+    var pollInterval, pollDeadline, pollTimer, countdownTimer;
+    var submitting = false;
+    var addressReady = false;
+    var soldOut = false;
+
     $(function () { getDetail(); });
 
+    function getGoodsIdFromUrl() {
+        var value;
+        try { value = new URLSearchParams(window.location.search).get("goodsId"); }
+        catch (e) { value = null; }
+        return /^\d+$/.test(value || "") && Number(value) > 0 ? value : null;
+    }
+
+    function redirectToLogin() {
+        var redirect = window.location.pathname + window.location.search;
+        window.location.replace("/login/index?redirect=" + encodeURIComponent(redirect));
+    }
+
+    function handleApiError(data, fallback) {
+        if (data && Number(data.code) === SESSION_ERROR) {
+            layer.msg("登录已失效，请重新登录", {time: 1000}, redirectToLogin);
+            return true;
+        }
+        layer.msg((data && data.msg) || fallback || "请求失败，请稍后重试");
+        return false;
+    }
+
+    function setSubmitting(value, text) {
+        submitting = value;
+        var button = $("#buyButton");
+        button.text(text || "⚡ 立即秒杀");
+        button.prop("disabled", value || soldOut || Number($("#remainingSeconds").val()) !== 0);
+    }
+
     function getSeckillPath() {
+        if (submitting) { return; }
         var goodsId = $("#goodsId").val();
+        var verifyCode = $.trim($("#verifyCode").val());
+        if (!goodsId) { layer.msg("商品信息尚未加载完成"); return; }
+        if (!addressReady || !$("#addressSelect").val()) { layer.msg("请先设置收货地址"); return; }
+        if (!/^\d+$/.test(verifyCode)) { layer.msg("请输入图片中的数字验证码"); return; }
+        setSubmitting(true, "正在验证...");
         $.ajax({
             url: "/seckill/getPath", type: "GET",
-            data: { goodsId: goodsId, verifyCode: $("#verifyCode").val() },
+            data: { goodsId: goodsId, verifyCode: verifyCode },
             success: function (data) {
-                if (data.code == 0) { doSeckill(data.data); }
-                else { layer.msg(data.msg); }
+                if (data && Number(data.code) === 0 && data.data) { doSeckill(data.data); }
+                else { setSubmitting(false); handleApiError(data, "验证码校验失败"); refreshVCode(); }
             },
-            error: function () { layer.msg("请求有误！"); }
+            error: function () { setSubmitting(false); layer.msg("网络异常，请稍后重试"); refreshVCode(); }
         });
     }
 
-    // 轮询退避参数：首次 200ms，每次 ×1.5，封顶 3s；累计约 60s 后放弃。
-    // 原实现为固定 50ms 无上限重试，消息进死信队列时单个用户会以 20QPS 永久空转。
-    var POLL_INTERVAL_INIT = 200, POLL_INTERVAL_MAX = 3000, POLL_TIMEOUT_MS = 60000;
-    var pollInterval, pollDeadline;
-
     function getSeckillResult(goodsId) {
-        // 首次调用初始化退避状态
         if (pollInterval === undefined) {
             pollInterval = POLL_INTERVAL_INIT;
             pollDeadline = Date.now() + POLL_TIMEOUT_MS;
         }
         $.ajax({
-            url: "/seckill/result", type: "GET",
-            data: { goodsId: $("#goodsId").val() },
+            url: "/seckill/result", type: "GET", data: { goodsId: goodsId },
             success: function (data) {
-                if (data.code == 0) {
-                    var result = data.data;
+                if (data && Number(data.code) === 0) {
+                    var result = Number(data.data);
                     if (result < 0) {
-                        resetPoll();
-                        layer.msg("抱歉，秒杀失败!");
-                    } else if (result == 0) {
+                        resetPoll(); setSubmitting(false); layer.msg("抱歉，秒杀失败！"); refreshVCode();
+                    } else if (result === 0) {
                         if (Date.now() >= pollDeadline) {
-                            resetPoll();
+                            resetPoll(); setSubmitting(false);
                             layer.msg("排队超时，请稍后在订单列表中确认结果");
                             return;
                         }
-                        setTimeout(function () { getSeckillResult(goodsId); }, pollInterval);
-                        // 指数退避，避免大量用户同时高频轮询压垮服务端
+                        pollTimer = setTimeout(function () { getSeckillResult(goodsId); }, pollInterval);
                         pollInterval = Math.min(Math.floor(pollInterval * 1.5), POLL_INTERVAL_MAX);
-                        layer.msg(data.msg);
-                    } else {
+                        $("#buyButton").text("排队处理中...");
+                    } else if (Number.isSafeInteger(result)) {
                         resetPoll();
-                        layer.confirm("恭喜你，秒杀成功！查看订单？", { btn: ["确定","取消"] },
-                            function () { window.location.href = "order_detail.htm?orderId=" + result; },
-                            function () { layer.closeAll(); });
+                        window.location.replace("/order_detail.htm?orderId=" + encodeURIComponent(result));
+                    } else {
+                        resetPoll(); setSubmitting(false); layer.msg("返回的订单信息无效");
                     }
                 } else {
-                    // 含服务端限流（达到访问限制次数），停止轮询避免雪上加霜
-                    resetPoll();
-                    layer.msg(data.msg);
+                    resetPoll(); setSubmitting(false); handleApiError(data, "查询秒杀结果失败");
                 }
             },
-            error: function () { resetPoll(); layer.msg("请求有误！"); }
+            error: function () { resetPoll(); setSubmitting(false); layer.msg("网络异常，请稍后重试"); }
         });
     }
 
-    // 轮询结束后清空状态，使下一次秒杀重新从初始间隔开始
     function resetPoll() {
+        if (pollTimer) { clearTimeout(pollTimer); }
+        pollTimer = null;
         pollInterval = undefined;
         pollDeadline = undefined;
     }
 
     function doSeckill(path) {
+        setSubmitting(true, "正在提交...");
         $.ajax({
-            url: "/seckill/" + path + "/seckillWithCacheAndMQ", type: "POST",
-            data: { goodsId: $("#goodsId").val() },
+            url: "/seckill/" + encodeURIComponent(path) + "/seckillWithCacheAndMQ", type: "POST",
+            data: { goodsId: $("#goodsId").val(), deliveryAddrId: $("#addressSelect").val() },
             success: function (data) {
-                if (data.code == 0) { resetPoll(); getSeckillResult($("#goodsId").val()); }
-                else { layer.msg(data.msg); }
+                if (data && Number(data.code) === 0) {
+                    resetPoll(); $("#buyButton").text("排队处理中...");
+                    getSeckillResult($("#goodsId").val());
+                } else { setSubmitting(false); handleApiError(data, "秒杀提交失败"); refreshVCode(); }
             },
-            error: function () { layer.msg("请求有误！"); }
+            error: function () { setSubmitting(false); layer.msg("网络异常，请稍后重试"); refreshVCode(); }
         });
     }
 
     function render(detail) {
-        var remainingSeconds = detail.remainingSeconds;
-        var goods = detail.goodsVo;
-        var user  = detail.user;
-        if (user != null) { $("#userTip").hide(); }
-        $("#goodsName").text(goods.goodsName);
-        $("#goodsImg").attr("src", goods.goodsImg);
-        $("#startTime").text(goods.startDate);
-        $("#remainingSeconds").val(remainingSeconds);
+        var goods = detail && detail.goodsVo;
+        if (!goods || !goods.id) { layer.msg("商品信息不存在"); return; }
+        if (detail.user != null) { $("#userTip").hide(); }
+        $("#goodsName").text(goods.goodsName || "—");
+        if (goods.goodsImg) { $("#goodsImage").attr("src", goods.goodsImg).show(); $("#goodsPlaceholder").hide(); }
+        $("#startTime").text(goods.startDate || "—");
+        $("#remainingSeconds").val(detail.remainingSeconds);
         $("#goodsId").val(goods.id);
         $("#goodsPrice").text(goods.goodsPrice);
         $("#seckillPrice").text(goods.seckillPrice);
-        $("#stockCount").text(goods.goodsStock);
+        soldOut = Number(goods.stockCount || 0) <= 0;
+        $("#stockCount").text(goods.stockCount == null ? "0" : goods.stockCount);
+        if (detail.user != null) { loadAddresses(); }
         countDown();
     }
 
-    function getQueryString(name) {
-        var reg = new RegExp("(^|&)" + name + "=([^&]*)(&|$)");
-        var r = window.location.search.substr(1).match(reg);
-        if (r != null) { return unescape(r[2]); }
-        return null;
+    function loadAddresses() {
+        $.ajax({
+            url: "/address/list", type: "GET",
+            success: function (data) {
+                var select = $("#addressSelect").empty();
+                if (!data || Number(data.code) !== 0 || !data.data || !data.data.length) {
+                    select.append($('<option>').val('').text('暂无收货地址，请先添加'));
+                    addressReady = false;
+                    return;
+                }
+                $.each(data.data, function (_, address) {
+                    var text = address.receiverName + " " + address.receiverMobile + " "
+                        + address.province + address.city + address.district + address.detail;
+                    select.append($('<option>').val(address.id).text(text));
+                });
+                var defaultAddress = data.data.find(function (address) { return address.defaultAddress; });
+                if (defaultAddress) { select.val(String(defaultAddress.id)); }
+                select.prop('disabled', false);
+                addressReady = true;
+            },
+            error: function () { addressReady = false; }
+        });
     }
 
     function getDetail() {
-        var goodsId = getQueryString("goodsId");
+        var goodsId = getGoodsIdFromUrl();
+        if (!goodsId) {
+            $("#goodsName").text("商品参数无效");
+            $("#seckillTip").text("请返回商品列表重新选择");
+            $("#buyButton").prop("disabled", true);
+            return;
+        }
         $.ajax({
-            url: "/goods/detailStatic/" + goodsId, type: "GET",
+            url: "/goods/detailStatic/" + encodeURIComponent(goodsId), type: "GET",
             success: function (data) {
-                if (data.code == 0) { render(data.data); }
-                else { layer.msg(data.msg); }
+                if (data && Number(data.code) === 0) { render(data.data); }
+                else { handleApiError(data, "商品加载失败"); }
             },
-            error: function () { layer.msg("请求有误！"); }
+            error: function () { layer.msg("商品加载失败，请稍后重试"); }
         });
     }
 
     function refreshVCode() {
-        $("#verifyCodeImg").attr("src", "/seckill/verifyCode?goodsId=" + $("#goodsId").val() + "&timestamp=" + new Date().getTime());
+        var goodsId = $("#goodsId").val();
+        if (goodsId) {
+            $("#verifyCode").val("");
+            $("#verifyCodeImg").attr("src", "/seckill/verifyCode?goodsId=" + encodeURIComponent(goodsId) + "&timestamp=" + Date.now());
+        }
     }
 
     function countDown() {
-        var s = parseInt($("#remainingSeconds").val());
-        var timeout;
+        var s = Number($("#remainingSeconds").val());
+        if (countdownTimer) { clearTimeout(countdownTimer); }
         if (s > 0) {
-            $("#buyButton").attr("disabled", true);
-            $("#seckillTip").html("⏳ 距开抢：<strong>" + s + "</strong> 秒");
-            timeout = setTimeout(function () {
-                $("#remainingSeconds").val(s - 1);
-                countDown();
+            $("#buyButton").prop("disabled", true);
+            $("#seckillTip").html("⏳ 距开抢：<strong>" + Math.ceil(s) + "</strong> 秒");
+            countdownTimer = setTimeout(function () {
+                $("#remainingSeconds").val(s - 1); countDown();
             }, 1000);
-        } else if (s == 0) {
-            $("#buyButton").attr("disabled", false);
-            if (timeout) { clearTimeout(timeout); }
-            $("#seckillTip").html("🔥 秒杀进行中！");
-            $("#verifyCodeImg").attr("src", "/seckill/verifyCode?goodsId=" + $("#goodsId").val());
-            $("#verifyCodeImg").show();
-            $("#verifyCode").show();
+        } else if (s === 0) {
+            if (soldOut) {
+                $("#buyButton").prop("disabled", true);
+                $("#seckillTip").html("本场秒杀已售罄");
+            } else {
+                setSubmitting(false);
+                $("#seckillTip").html("🔥 秒杀进行中！");
+                $("#verifyCodeImg, #verifyCode").show();
+                refreshVCode();
+            }
         } else {
-            $("#buyButton").attr("disabled", true);
+            $("#buyButton").prop("disabled", true);
             $("#seckillTip").html("本场秒杀已结束");
-            $("#verifyCodeImg").hide();
-            $("#verifyCode").hide();
+            $("#verifyCodeImg, #verifyCode").hide();
         }
     }
 </script>

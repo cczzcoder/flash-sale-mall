@@ -31,6 +31,10 @@ public interface GoodsDao extends BaseMapper<SeckillGoods> {
             " where goods_id = #{goodsId} and stock_count > 0")
     int reduceStock(SeckillGoods goods);
 
+    /** 订单关闭时在同一数据库事务中按订单数量恢复库存。 */
+    @Update("update seckill_goods set stock_count = stock_count + #{count} where goods_id = #{goodsId}")
+    int increaseStock(@Param("goodsId") long goodsId, @Param("count") int count);
+
     /**
      * 对账用：读取所有秒杀商品的 goods_id 与当前 DB 库存。
      * 只取对账需要的两列，避免 JOIN goods 表。

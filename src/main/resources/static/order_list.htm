@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>闪惠智购商城 - 我的订单</title>
+    <script src="/jquery-validation/lib/jquery-1.11.1.js"></script><script src="/js/csrf.js"></script>
+    <link rel="stylesheet" href="/bootstrap/css/bootstrap.css"/>
+    <script src="/layer/layer.js"></script>
+    <style>
+        body{background:#f4f4f8;font-family:'PingFang SC','Microsoft YaHei',sans-serif;margin:0;color:#333}
+        .topbar{background:linear-gradient(135deg,#1a1a2e,#16213e);padding:14px 24px;display:flex;align-items:center;justify-content:space-between}
+        .brand{color:#fff;font-size:18px;font-weight:900;text-decoration:none}.brand:hover{color:#fff;text-decoration:none}.accent{color:#e74c3c}
+        .nav{display:flex;gap:18px}.nav a{color:rgba(255,255,255,.72);font-size:13px;text-decoration:none}.nav a:hover{color:#fff}
+        .wrap{max-width:900px;margin:28px auto;padding:0 16px}.heading{display:flex;align-items:end;justify-content:space-between;margin-bottom:18px}
+        h2{font-size:22px;margin:0;font-weight:800}.muted{color:#999;font-size:13px}.order{background:#fff;border-radius:10px;margin-bottom:14px;box-shadow:0 2px 10px rgba(0,0,0,.06);overflow:hidden}
+        .order-head{padding:13px 18px;background:#fafafa;border-bottom:1px solid #f0f0f0;display:flex;justify-content:space-between;font-size:13px}.status{color:#e67e22;font-weight:700}
+        .order-body{padding:16px 18px;display:flex;gap:14px;align-items:center}.thumb{width:64px;height:64px;border-radius:8px;background:#f1f1f1;display:flex;align-items:center;justify-content:center;font-size:30px;flex-shrink:0}
+        .goods{flex:1;min-width:0}.goods-name{font-weight:700;margin-bottom:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.meta{font-size:12px;color:#888;line-height:1.8}.price{font-size:17px;font-weight:800;color:#e74c3c;white-space:nowrap}.actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.btn{border:0;border-radius:6px;padding:7px 12px;font-size:12px;cursor:pointer}.btn-main{background:#e74c3c;color:#fff}.btn-light{background:#f2f2f2;color:#666}.empty{background:#fff;padding:50px 20px;text-align:center;border-radius:10px;color:#999}
+        @media(max-width:600px){.order-body{align-items:flex-start;flex-wrap:wrap}.actions{width:100%;justify-content:flex-start}.heading{align-items:flex-start;gap:8px;flex-direction:column}}
+    </style>
+</head>
+<body>
+<div class="topbar"><a class="brand" href="/goods/list">⚡ 闪惠<span class="accent">智购</span>商城</a><div class="nav"><a href="/goods/list">继续购物</a><a href="/address.htm">地址管理</a></div></div>
+<main class="wrap">
+    <div class="heading"><h2>我的订单</h2><span class="muted" id="summary">加载中...</span></div>
+    <div id="orders"><div class="empty">正在加载订单...</div></div>
+</main>
+<script>
+    var SESSION_ERROR=500210;
+    var statusMap=['待支付','待发货','已发货','已收货','已关闭','已完成','已退款'];
+    $(loadOrders);
+    function loadOrders(){
+        $.get('/order/list',{limit:50},function(data){
+            if(!data||Number(data.code)!==0){handleError(data,'订单加载失败');return;}
+            var orders=data.data||[];$('#summary').text('共 '+orders.length+' 笔订单');
+            if(!orders.length){$('#orders').html('<div class="empty">暂无订单，去参加一场秒杀吧</div>');return;}
+            var html='';$.each(orders,function(_,o){html+=renderOrder(o)});$('#orders').html(html);
+        }).fail(function(){layer.msg('订单加载失败，请稍后重试')});
+    }
+    function renderOrder(o){
+        var status=Number(o.orderStatus),name=escapeHtml(o.goodsName||('商品 #'+o.goodsId));
+        var actions='<a class="btn btn-light" href="/order_detail.htm?orderId='+encodeURIComponent(o.id)+'">查看详情</a>';
+        if(status===0) actions+='<a class="btn btn-main" href="/order_detail.htm?orderId='+encodeURIComponent(o.id)+'">立即支付</a><button class="btn btn-light" onclick="cancelOrder('+o.id+')">取消订单</button>';
+        if(status===2) actions+='<button class="btn btn-main" onclick="changeStatus(\'receive\','+o.id+',\'确认已收货？\')">确认收货</button>';
+        if(status===3) actions+='<button class="btn btn-main" onclick="changeStatus(\'complete\','+o.id+',\'确认完成订单？\')">完成订单</button>';
+        if([1,2,3,5].indexOf(status)>=0) actions+=o.refundRequestDate?'<span class="btn btn-light">退款审核中</span>':'<button class="btn btn-light" onclick="requestRefund('+o.id+')">申请退款</button>';
+        var date=o.createDate?new Date(o.createDate).toLocaleString():'-';
+        var logistics=o.trackingNumber?'物流：'+escapeHtml((o.shippingCompany||'')+' '+o.trackingNumber):'';
+        return '<section class="order"><div class="order-head"><span>订单号：'+o.id+'</span><span class="status">'+(statusMap[status]||'未知状态')+'</span></div><div class="order-body"><div class="thumb">🛍️</div><div class="goods"><div class="goods-name">'+name+'</div><div class="meta">下单时间：'+escapeHtml(date)+'<br/>数量：'+(o.goodsCount||1)+'　收货人：'+escapeHtml(o.deliveryReceiverName||'-')+(logistics?'<br/>'+logistics:'')+'</div></div><div class="price">¥ '+(o.goodsPrice==null?'-':o.goodsPrice)+'</div><div class="actions">'+actions+'</div></div></section>';
+    }
+    function cancelOrder(id){if(!window.confirm('确定取消未支付订单？'))return;post('/order/cancel',id,'订单已取消')}
+    function changeStatus(action,id,message){if(!window.confirm(message))return;post('/order/'+action,id,'操作成功')}
+    function requestRefund(id){var reason=window.prompt('请输入退款原因');if(reason===null)return;reason=$.trim(reason);if(!reason){layer.msg('退款原因不能为空');return;}$.ajax({url:'/order/refund',type:'POST',data:{orderId:id,reason:reason},success:function(data){if(data&&Number(data.code)===0){layer.msg('退款申请已提交',{time:700},loadOrders)}else handleError(data,'退款申请失败')},error:function(){layer.msg('退款申请失败，请稍后重试')}})}
+    function post(url,id,success){$.post(url,{orderId:id},function(data){if(data&&Number(data.code)===0){layer.msg(success,{time:700},loadOrders)}else handleError(data,'操作失败')}).fail(function(){layer.msg('网络异常，请稍后重试')})}
+    function handleError(data,fallback){if(data&&Number(data.code)===SESSION_ERROR){var redirect=location.pathname+location.search;location.href='/login/index?redirect='+encodeURIComponent(redirect);return}layer.msg((data&&data.msg)||fallback)}
+    function escapeHtml(value){return $('<div>').text(value==null?'':value).html()}
+</script>
+</body>
+</html>

@@ -11,7 +11,9 @@
 - **页面静态化**：缓存秒杀页面到浏览器，减少服务器压力。
 
 ## 技术架构图
-![System Architecture](https://example.com/your_architecture_diagram.png)
+系统架构与链路说明见 `doc/技术文档.md`。
+
+高并发优化路线和分阶段验收标准见 `doc/高并发优化计划.md`。
 
 ## 运行环境
 
@@ -28,12 +30,18 @@ git clone https://github.com/pitt1997/seckill
 
 ### 2. 配置数据库：
 -   安装启动 MySQL 数据库。
--   运行 `sql` 文件夹中的 readme SQL 脚本，初始化数据库和表数据。
--   修改 `src/main/resources/application.properties` 中的数据库连接、Redis 配置和 RabbitMQ 配置。
+-   新库按 `sql/readme.sql` 初始化；已有数据库只执行 `sql/migration/upgrade_to_current.sql`，不要再拆分执行历史迁移脚本。
+-   本地演示可直接使用 `application.properties` 的默认值；部署环境建议通过环境变量覆盖连接信息：
+    `DB_URL`、`DB_USERNAME`、`DB_PASSWORD`、`REDIS_HOST`、`REDIS_PORT`、`REDIS_PASSWORD`、
+    `RABBITMQ_HOST`、`RABBITMQ_PORT`、`RABBITMQ_USERNAME`、`RABBITMQ_PASSWORD`、`RABBITMQ_VHOST`。
 
 ### 3. 配置依赖服务：
 
 -   需要提前安装并启动 Redis 和 RabbitMQ 服务，确保项目能正确连接。
+
+-   AI 导购使用 `CLAUDE_API_KEY` 配置密钥；未配置时页面仍可打开，但对话会返回降级提示。HTTPS 部署时设置 `COOKIE_SECURE=true`。
+
+-   浏览器写操作启用双提交 CSRF 保护：服务端下发 `XSRF-TOKEN` Cookie，前端自动发送 `X-XSRF-TOKEN` 请求头；接口客户端使用 `Authorization` 时可不携带该 Cookie。
 
 ### 4. 启动项目：
 
@@ -54,6 +62,24 @@ git clone https://github.com/pitt1997/seckill
 ### 6. 调整秒杀时间：
 
 -   在数据库中调整秒杀商品的时间范围，确保秒杀活动按时启动。
+
+### 7. 演示完整业务链路：
+
+-   商品列表：`http://localhost:8080/goods/list`
+-   我的订单：`http://localhost:8080/order_list.htm`
+-   收货地址：`http://localhost:8080/address.htm`
+-   管理后台：`http://localhost:8080/admin.htm`
+-   秒杀成功后可在订单详情页完成模拟支付；管理员发货后，用户可在“我的订单”中确认收货并完成订单。已支付订单也可提交退款申请，由管理员在后台审核通过后标记为已退款（演示流程不接触真实资金）。
+-   管理员账户不会写入默认密码。请按 `sql/migration/README.md` 的说明，用 `MD5Util.inputPassToDbPass` 生成密码后插入 `admin_user` 表，再登录管理后台。
+
+> 演示环境建议将 `seckill_goods.start_date` 设置为当前时间前几分钟、`end_date` 设置为当前时间后 30 分钟，并准备至少一条收货地址。秒杀时间由服务端校验，前端倒计时仅用于展示。
+
+### 8. 推荐演示初始化顺序：
+
+1. 执行基础建表脚本及 `sql/migration/upgrade_to_current.sql`。
+2. 执行 `sql/demo_seed.sql`，将商品 1 设置为进行中、商品 2 设置为未开始、商品 3 设置为已结束，并为演示用户准备默认收货地址。
+3. 启动 Redis、RabbitMQ 和应用，使用手机号 `15008888888` 登录，密码沿用基础用户脚本中的测试密码 `123456`。
+4. 打开商品列表完成一遍秒杀、支付、发货、收货流程。管理员密码仍需按 V4 说明单独生成，不在脚本中写入默认密码。
 
 ## 压力测试与性能结果
 
@@ -106,7 +132,7 @@ git clone https://github.com/pitt1997/seckill
 
 ### 3. 管理员模块
 
--   **秒杀商品管理**：管理员可以增加、修改商品秒杀时间，设置秒杀库存。
+-   **秒杀商品管理**：管理员可以增加、修改商品资料和秒杀时间；已有商品的库存通过“补货”操作增加，编辑资料不会覆盖秒杀剩余库存。
 -   **用户管理**：管理员可以查看所有用户的秒杀记录。
 
 * * *

@@ -20,7 +20,8 @@
                        overflow: hidden; display: flex; flex-wrap: wrap; }
         .thumb-col { width: 320px; background: linear-gradient(135deg,#f5f5f5,#ececec);
                      display: flex; align-items: center; justify-content: center; font-size: 100px;
-                     min-height: 280px; flex-shrink: 0; }
+                     min-height: 280px; flex-shrink: 0; overflow:hidden; }
+        .thumb-col img { width:100%; height:100%; object-fit:cover; }
         .info-col { flex: 1; padding: 28px; min-width: 260px; }
         .goods-title { font-size: 20px; font-weight: 700; color: #222; margin-bottom: 16px; line-height: 1.4; }
         .price-block { background: #fff8f8; border-radius: 10px; padding: 14px 18px; margin-bottom: 18px; }
@@ -53,11 +54,11 @@
 <body>
 <div class="topbar">
     <a class="brand" href="/goods/list">⚡ 闪惠<span class="accent">智购</span>商城</a>
-    <a class="back" href="/goods/list">← 返回列表</a>
+    <div style="display:flex;gap:18px;align-items:center"><a class="back" href="/order_list.htm">我的订单</a><a class="back" href="/goods/list">← 返回列表</a></div>
 </div>
 <div class="wrap">
     <div class="detail-card">
-        <div class="thumb-col">🛍️</div>
+        <div class="thumb-col"><img th:if="${goods.goodsImg != null and !#strings.isEmpty(goods.goodsImg)}" th:src="${goods.goodsImg}" alt="商品图片"/><span th:unless="${goods.goodsImg != null and !#strings.isEmpty(goods.goodsImg)}">🛍️</span></div>
         <div class="info-col">
             <span th:if="${user eq null}" style="color:#e74c3c;font-size:13px;display:block;margin-bottom:12px;">
                 ⚠️ 您尚未登录，请 <a href="/login/index" style="color:#e74c3c;font-weight:600;">点此登录</a> 后参与秒杀
@@ -73,7 +74,9 @@
             <div id="seckillTip" class="countdown-box" style="display:none"></div>
             <input type="hidden" id="remainingSeconds" th:value="${remainingSeconds}"/>
             <form id="seckillForm" method="post" action="/seckill/seckillWithoutCache" style="margin-top:8px;">
-                <button class="btn-seckill" type="submit" id="buyButton">⚡ 立即秒杀</button>
+                <button class="btn-seckill" type="submit" id="buyButton"
+                        th:disabled="${goods.activityStatus != 1 or goods.soldOut}"
+                        th:attr="data-sold-out=${goods.soldOut}">⚡ 立即秒杀</button>
                 <input type="hidden" name="goodsId" th:value="${goods.id}"/>
             </form>
         </div>
@@ -92,12 +95,12 @@
                      '<span class="cd-num">' + pad(m) + '</span><span class="cd-sep">:</span>' +
                      '<span class="cd-num">' + pad(sec) + '</span>');
             setTimeout(function () { $("#remainingSeconds").val(s-1); countDown(); }, 1000);
-        } else if (s == 0) {
+        } else if (s == 0 && $("#buyButton").attr("data-sold-out") !== "true") {
             $("#buyButton").prop("disabled", false);
             tip.html('<span class="tip-running">🔥 秒杀进行中！</span>');
         } else {
             $("#buyButton").prop("disabled", true);
-            tip.html('<span class="tip-ended">本场秒杀已结束</span>');
+            tip.html('<span class="tip-ended">' + ($("#buyButton").attr("data-sold-out") === "true" ? '本场秒杀已售罄' : '本场秒杀已结束') + '</span>');
         }
     }
     function pad(n) { return n < 10 ? '0'+n : ''+n; }

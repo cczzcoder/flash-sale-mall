@@ -25,6 +25,7 @@ import java.io.IOException;
  *  - 正常消费（含库存不足）→ basicAck
  *  - 唯一索引冲突（重复下单）→ 回滚 Redis 预扣后 basicAck，视为幂等成功
  *  - 其他 DB 写入异常 → basicNack(requeue=false) 进死信队列
+ *  - ACK 异常 → 不回补库存，等待 RabbitMQ 重投；reservation 状态保证重投幂等
  */
 @Service
 public class MQReceiver {
@@ -47,33 +48,59 @@ public class MQReceiver {
         SeckillUser user = mm.getUser();
         long goodsId = mm.getGoodsId();
 
+        boolean dbCommitted = false;
         try {
             GoodsVo goodsVo = goodsService.getGoodsVoByGoodsId(goodsId);
 
             // 1.事务：DB 扣库存 + 写订单。
             //   不再预判库存/预查重复订单：扣减 SQL 的受影响行数本身就是权威判定，
             //   重复下单由 seckill_order 唯一索引 u_uid_gid 兜底，省两次热路径查询。
-            OrderInfo result = seckillService.seckillWithCache(user, goodsVo);
+            OrderInfo result = seckillService.seckillWithCache(user, goodsVo, mm.getDeliveryAddrId());
             if (result == null) {
                 // reduceStock 返回 false（库存已耗尽），补偿 Redis 库存
-                redisService.rollbackStock(GoodsKey.getSeckillGoodsStock, "" + goodsId);
+                rollbackReservation(mm);
                 logger.warn("DB 扣减失败，Redis 库存已回滚 goodsId={}", goodsId);
+            } else {
+                dbCommitted = true;
+                // ACK 前记录成功状态，ACK 失败重投时不能误回补库存。
+                if (mm.getReservationId() != null && !redisService.markReservationCommitted(mm.getReservationId())) {
+                    throw new IllegalStateException("reservation 已被标记为释放，拒绝覆盖 goodsId=" + goodsId);
+                }
             }
-            channel.basicAck(tag, false);
 
         } catch (DuplicateKeyException e) {
             // 唯一索引冲突 = 该用户已下过单，事务已回滚故 DB 库存未扣，补偿 Redis 后视为幂等成功
-            redisService.rollbackStock(GoodsKey.getSeckillGoodsStock, "" + goodsId);
+            if (!redisService.isReservationCommitted(mm.getReservationId())) {
+                rollbackReservation(mm);
+            }
             logger.info("重复下单，幂等丢弃 userId={} goodsId={}", user.getId(), goodsId);
-            channel.basicAck(tag, false);
 
         } catch (Exception e) {
             logger.error("秒杀消费异常，消息转入死信队列 goodsId={}: {}", goodsId, e.getMessage(), e);
-            // 补偿 Redis 库存（事务已回滚，DB 未扣减，但 Redis 已预扣）
-            redisService.rollbackStock(GoodsKey.getSeckillGoodsStock, "" + goodsId);
+            // 只有 DB 未提交时才回补；提交后发生的 Redis 异常不能再增加库存。
+            if (!dbCommitted) {
+                rollbackReservation(mm);
+            }
             // requeue=false → 消息进入死信队列，不无限重投
-            channel.basicNack(tag, false, false);
+            try {
+                channel.basicNack(tag, false, false);
+            } catch (IOException nackError) {
+                logger.error("秒杀消息 basicNack 失败 goodsId={}", goodsId, nackError);
+            }
+            return;
+        }
+
+        // ACK 失败只会让 RabbitMQ 重投，不能进入库存补偿分支。
+        try {
+            channel.basicAck(tag, false);
+        } catch (IOException ackError) {
+            logger.error("秒杀消息 basicAck 失败，等待 RabbitMQ 重投 goodsId={}, reservationId={}",
+                    goodsId, mm.getReservationId(), ackError);
         }
     }
-}
 
+    private void rollbackReservation(SeckillMessage message) {
+        redisService.rollbackStockOnce(GoodsKey.getSeckillGoodsStock,
+                "" + message.getGoodsId(), message.getReservationId());
+    }
+}

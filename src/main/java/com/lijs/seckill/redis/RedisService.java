@@ -86,6 +86,30 @@ public class RedisService {
     }
 
     /**
+     * Only initialize a cache value when the key does not exist.
+     * Used for stock warm-up so an application restart cannot overwrite an
+     * already-consumed Redis reservation with the database snapshot.
+     */
+    public <T> boolean setIfAbsent(KeyPrefix prefix, String key, T value) {
+        Jedis jedis = null;
+        try {
+            jedis = jedisPool.getResource();
+            String realKey = prefix.getPrefix() + key;
+            String serialized = beanToString(value);
+            if (serialized == null || serialized.isEmpty()) {
+                return false;
+            }
+            long created = jedis.setnx(realKey, serialized);
+            if (created == 1 && prefix.expireSeconds() > 0) {
+                jedis.expire(realKey, prefix.expireSeconds());
+            }
+            return created == 1;
+        } finally {
+            close(jedis);
+        }
+    }
+
+    /**
      * 减少值
      */
     public <T> Long decr(KeyPrefix prefix, String key) {
@@ -251,12 +275,79 @@ public class RedisService {
      * @param key 商品ID对应的库存Key
      */
     public void rollbackStock(KeyPrefix prefix, String key) {
+        increaseBy(prefix, key, 1);
+    }
+
+    /** 按 reservationId 幂等回补一次库存，标记和加库存通过 Lua 原子完成。 */
+    public boolean rollbackStockOnce(KeyPrefix stockPrefix, String stockKey, String reservationId) {
+        if (reservationId == null || reservationId.trim().isEmpty()) {
+            rollbackStock(stockPrefix, stockKey);
+            return true;
+        }
+        Jedis jedis = null;
+        try {
+            jedis = jedisPool.getResource();
+            String stockRedisKey = stockPrefix.getPrefix() + stockKey;
+            String reservationRedisKey = GoodsKey.getSeckillReservation.getPrefix() + reservationId;
+            int ttl = GoodsKey.getSeckillReservation.expireSeconds();
+            String luaScript =
+                    "if redis.call('EXISTS', KEYS[2]) == 1 then return 0 end " +
+                    "redis.call('INCRBY', KEYS[1], ARGV[1]) " +
+                    "redis.call('SETEX', KEYS[2], ARGV[2], ARGV[3]) " +
+                    "return 1";
+            Object result = jedis.eval(luaScript, 2, stockRedisKey, reservationRedisKey,
+                    "1", String.valueOf(ttl), "RELEASED");
+            return result != null && ((Long) result) == 1L;
+        } finally {
+            close(jedis);
+        }
+    }
+
+    /** 标记 reservation 已完成 DB 下单，供 ACK 失败后的重复投递识别。 */
+    public boolean markReservationCommitted(String reservationId) {
+        if (reservationId == null || reservationId.trim().isEmpty()) {
+            return false;
+        }
+        Jedis jedis = null;
+        try {
+            jedis = jedisPool.getResource();
+            String reservationRedisKey = GoodsKey.getSeckillReservation.getPrefix() + reservationId;
+            int ttl = GoodsKey.getSeckillReservation.expireSeconds();
+            String luaScript =
+                    "local current = redis.call('GET', KEYS[1]) " +
+                    "if not current then " +
+                    "  redis.call('SETEX', KEYS[1], ARGV[1], ARGV[2]) return 1 " +
+                    "elseif current == ARGV[2] then return 1 " +
+                    "else return 0 end";
+            Object result = jedis.eval(luaScript, 1, reservationRedisKey,
+                    String.valueOf(ttl), "COMMITTED");
+            return result != null && ((Long) result) == 1L;
+        } finally {
+            close(jedis);
+        }
+    }
+
+    /** 判断 reservation 是否已经完成 DB 下单。 */
+    public boolean isReservationCommitted(String reservationId) {
+        if (reservationId == null || reservationId.trim().isEmpty()) {
+            return false;
+        }
+        String state = get(GoodsKey.getSeckillReservation, reservationId, String.class);
+        return "COMMITTED".equals(state);
+    }
+
+    /** 原子增加指定数量，用于订单关闭后按 goodsCount 回补 Redis 库存。 */
+    public long increaseBy(KeyPrefix prefix, String key, int count) {
+        if (count <= 0) {
+            throw new IllegalArgumentException("count must be positive");
+        }
         Jedis jedis = null;
         try {
             jedis = jedisPool.getResource();
             String realKey = prefix.getPrefix() + key;
-            jedis.incr(realKey);
-            logger.info("库存回滚成功, key: {}", realKey);
+            long stock = jedis.incrBy(realKey, count);
+            logger.info("库存回滚成功, key: {}, count: {}, stock: {}", realKey, count, stock);
+            return stock;
         } finally {
             close(jedis);
         }

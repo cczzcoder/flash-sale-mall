@@ -1,0 +1,47 @@
+groups:
+  - name: seckill-blackbox
+    rules:
+      - alert: SeckillHttpProbeDown
+        expr: probe_success{job="seckill-blackbox"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Seckill HTTP probe is failing"
+          description: "Blackbox probe for {{ $labels.instance }} has failed for 2 minutes."
+
+      - alert: SeckillHttpProbeSlow
+        expr: probe_duration_seconds{job="seckill-blackbox"} > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Seckill HTTP probe latency is above example threshold"
+          description: "Probe for {{ $labels.instance }} exceeded 1 second for 5 minutes. Tune this example threshold from a measured baseline and SLO."
+
+      - alert: PrometheusTargetMissing
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus scrape target is down"
+          description: "Target {{ $labels.job }}/{{ $labels.instance }} has been unreachable for 2 minutes."
+
+      - alert: SeckillApplicationScrapeDown
+        expr: up{job="seckill-app"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Seckill application metrics scrape is down"
+          description: "The application Actuator Prometheus endpoint has been unreachable for 2 minutes."
+
+      - alert: SeckillDeadLetterQueueGrowing
+        expr: seckill_rabbit_queue_depth{job="seckill-app",queue="seckill.dead.queue"} > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Seckill dead-letter queue is not empty"
+          description: "The dead-letter queue has contained messages for 5 minutes; inspect before resetting test data."

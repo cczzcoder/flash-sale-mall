@@ -8,12 +8,16 @@ import com.lijs.seckill.rabbitmq.SeckillMessage;
 import com.lijs.seckill.redis.AccessKey;
 import com.lijs.seckill.redis.GoodsKey;
 import com.lijs.seckill.redis.RedisService;
+import com.lijs.seckill.redis.SeckillKey;
 import com.lijs.seckill.result.Result;
 import com.lijs.seckill.result.ResultCode;
 import com.lijs.seckill.service.GoodsService;
+import com.lijs.seckill.service.DeliveryAddressService;
 import com.lijs.seckill.service.OrderService;
 import com.lijs.seckill.service.SeckillService;
+import com.lijs.seckill.util.UUIDUtil;
 import com.lijs.seckill.vo.GoodsVo;
+import com.lijs.seckill.vo.SeckillWindowVo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.AmqpException;
@@ -29,6 +33,7 @@ import javax.servlet.http.HttpServletResponse;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.Date;
 import java.util.List;
 
 @RequestMapping("/seckill")
@@ -46,20 +51,25 @@ public class SeckillController implements InitializingBean {
     @Autowired
     private OrderService orderService;
     @Autowired
+    private DeliveryAddressService deliveryAddressService;
+    @Autowired
     private MQSender mQSender;
 
     /**
      * 系统初始化的时候做的事情。
      * 在容器启动时候，检测到了实现了接口InitializingBean之后，
      */
+    @Override
     public void afterPropertiesSet() {
         List<GoodsVo> goodslist = goodsService.getGoodsVoList();
         if (goodslist == null) {
             return;
         }
         for (GoodsVo goods : goodslist) {
-            // 程序启动时将商品库存加载到redis中
-            redisService.set(GoodsKey.getSeckillGoodsStock, "" + goods.getId(), goods.getStockCount());
+            // 只在 key 缺失时预热，避免重启覆盖 Redis 中已预扣的库存。
+            redisService.setIfAbsent(GoodsKey.getSeckillGoodsStock, "" + goods.getId(), goods.getStockCount());
+            redisService.set(SeckillKey.getSeckillWindow, "" + goods.getId(),
+                    new SeckillWindowVo(goods.getStartDate(), goods.getEndDate()));
         }
         logger.info("缓存加载完成...");
     }
@@ -75,12 +85,16 @@ public class SeckillController implements InitializingBean {
      */
     @RequestMapping(value = "/verifyCode")
     @ResponseBody
-    public Result<String> verifyCode(Model model, SeckillUser user,
+    public Result<String> verifyCode(HttpServletRequest request, Model model, SeckillUser user,
                                      @RequestParam("goodsId") Long goodsId, HttpServletResponse response) {
         model.addAttribute("user", user);
         // 如果用户为空则返回登录页面
         if (user == null) {
             return Result.error(ResultCode.SESSION_ERROR);
+        }
+        // 验证码生成会占用 CPU 和输出流，限制为同一用户 5 秒内最多 5 次
+        if (isAccessLimited(request, user, 5)) {
+            return Result.error(ResultCode.ACCESS_LIMIT);
         }
         BufferedImage img = seckillService.createSeckillVerifyCode(user, goodsId);
         try {
@@ -114,6 +128,10 @@ public class SeckillController implements InitializingBean {
         // 如果用户为空，则返回至登录页面
         if (user == null) {
             return Result.error(ResultCode.SESSION_ERROR);
+        }
+        ResultCode window = checkSeckillWindow(goodsId);
+        if (window != ResultCode.SUCCESS) {
+            return Result.error(window);
         }
         // 限制访问次数：5s 之内最多 5 次
         if (isAccessLimited(request, user, 5)) {
@@ -193,13 +211,21 @@ public class SeckillController implements InitializingBean {
     @ResponseBody
     public Result<Integer> seckillWithCacheAndMQ(Model model, SeckillUser user,
                                                  @RequestParam(value = "goodsId", defaultValue = "0") long goodsId,
+                                                 @RequestParam(value = "deliveryAddrId", required = false) Long deliveryAddrId,
                                                  @PathVariable("path") String path) {
         model.addAttribute("user", user);
         // 1.如果用户为空则返回至登录页面
         if (user == null) {
             return Result.error(ResultCode.SESSION_ERROR);
         }
+        ResultCode window = checkSeckillWindow(goodsId);
+        if (window != ResultCode.SUCCESS) {
+            return Result.error(window);
+        }
         // 2.验证秒杀path路径
+        if (!deliveryAddressService.existsForOrder(user.getId(), deliveryAddrId)) {
+            return Result.error(deliveryAddrId == null ? ResultCode.ADDRESS_REQUIRED : ResultCode.ADDRESS_NOT_EXIST);
+        }
         boolean check = seckillService.checkPath(user, goodsId, path);
         if (!check) {
             return Result.error(ResultCode.REQUEST_ILLEGAL);
@@ -220,11 +246,14 @@ public class SeckillController implements InitializingBean {
         SeckillMessage mms = new SeckillMessage();
         mms.setUser(user);
         mms.setGoodsId(goodsId);
+        mms.setDeliveryAddrId(deliveryAddrId);
+        mms.setReservationId(UUIDUtil.uuid());
         try {
             mQSender.sendSeckillMessage(mms);
         } catch (AmqpException e) {
             // TCP 重试耗尽仍失败：Redis 已预扣但消息未入队，立即补偿
-            redisService.rollbackStock(GoodsKey.getSeckillGoodsStock, "" + goodsId);
+            redisService.rollbackStockOnce(GoodsKey.getSeckillGoodsStock, "" + goodsId,
+                    mms.getReservationId());
             logger.error("MQ 入队失败，Redis 库存已回滚 goodsId={}", goodsId, e);
             return Result.error(ResultCode.SECKILL_FAIL);
         }
@@ -244,13 +273,28 @@ public class SeckillController implements InitializingBean {
      * @return 订单详情页
      */
     @RequestMapping("/seckillWithoutCache")
-    public String seckillWithoutCache(Model model, SeckillUser user, @RequestParam("goodsId") Long goodsId) {
+    public String seckillWithoutCache(Model model, SeckillUser user, @RequestParam("goodsId") Long goodsId,
+                                      @RequestParam(value = "deliveryAddrId", required = false) Long deliveryAddrId) {
         model.addAttribute("user", user);
         // 如果用户为空则返回至登录页面
         if (user == null) {
             return "login";
         }
+        ResultCode window = checkSeckillWindow(goodsId);
+        if (window != ResultCode.SUCCESS) {
+            model.addAttribute("errorMessage", window);
+            return "seckill_fail";
+        }
+        if (!deliveryAddressService.existsForOrder(user.getId(), deliveryAddrId)) {
+            model.addAttribute("errorMessage", deliveryAddrId == null
+                    ? ResultCode.ADDRESS_REQUIRED : ResultCode.ADDRESS_NOT_EXIST);
+            return "seckill_fail";
+        }
         GoodsVo goodsVo = goodsService.getGoodsVoByGoodsId(goodsId);
+        if (goodsVo == null) {
+            model.addAttribute("errorMessage", ResultCode.GOODS_NOT_EXIST);
+            return "seckill_fail";
+        }
         // 判断商品库存，库存大于0，才进行操作，多线程下会出错
         int stockCount = goodsVo.getStockCount();
         if (stockCount <= 0) {
@@ -263,11 +307,51 @@ public class SeckillController implements InitializingBean {
             model.addAttribute("errorMessage", ResultCode.REPEAT_SECKILL);
             return "seckill_fail";
         }
-        OrderInfo orderinfo = seckillService.seckill(user, goodsVo);
-        // 如果秒杀成功则直接跳转到订单详情页
+        OrderInfo orderinfo = seckillService.seckill(user, goodsVo, deliveryAddrId);
+        // 库存已耗尽时 seckill() 返回 null，需单独处理，否则 order_detail 页渲染崩溃
+        if (orderinfo == null) {
+            model.addAttribute("errorMessage", ResultCode.SECKILL_OVER_ERROR);
+            return "seckill_fail";
+        }
+        // 秒杀成功，跳转到订单详情页
         model.addAttribute("orderinfo", orderinfo);
         model.addAttribute("goods", goodsVo);
         return "order_detail";
+    }
+
+    /** 服务端校验活动窗口，前端倒计时只负责展示，不能作为业务依据。 */
+    private ResultCode checkSeckillWindow(long goodsId) {
+        if (goodsId <= 0) {
+            return ResultCode.GOODS_NOT_EXIST;
+        }
+        SeckillWindowVo cachedWindow = redisService.get(SeckillKey.getSeckillWindow,
+                "" + goodsId, SeckillWindowVo.class);
+        Date start;
+        Date end;
+        if (cachedWindow != null) {
+            start = cachedWindow.getStartDate();
+            end = cachedWindow.getEndDate();
+        } else {
+            GoodsVo goods = goodsService.getGoodsVoByGoodsId(goodsId);
+            if (goods == null) {
+                return ResultCode.GOODS_NOT_EXIST;
+            }
+            start = goods.getStartDate();
+            end = goods.getEndDate();
+            redisService.setIfAbsent(SeckillKey.getSeckillWindow, "" + goodsId,
+                    new SeckillWindowVo(start, end));
+        }
+        if (start == null || end == null || !start.before(end)) {
+            return ResultCode.GOODS_TIME_INVALID;
+        }
+        Date now = new Date();
+        if (now.before(start)) {
+            return ResultCode.SECKILL_NOT_STARTED;
+        }
+        if (now.after(end)) {
+            return ResultCode.SECKILL_ENDED;
+        }
+        return ResultCode.SUCCESS;
     }
 
 }

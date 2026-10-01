@@ -37,15 +37,24 @@ public class MQSender {
     /**
      * 注册 Publisher-Confirm 回调。
      * 当 Broker 返回 NACK（落盘失败）时，从 CorrelationData 中取出商品 ID，
-     * 执行 rollbackStock() 将 Redis 预扣的1个库存补回。
+     * 执行幂等回补，将 Redis 预扣的1个库存补回。
      */
     @PostConstruct
     public void init() {
         rabbitTemplate.setConfirmCallback((correlationData, ack, cause) -> {
             if (!ack && correlationData != null) {
-                String goodsId = correlationData.getId();
-                redisService.rollbackStock(GoodsKey.getSeckillGoodsStock, goodsId);
-                logger.error("MQ Broker NACK，Redis 库存已回滚, goodsId={}, cause={}", goodsId, cause);
+                String correlationId = correlationData.getId();
+                String[] parts = correlationId == null ? new String[0] : correlationId.split(":", 2);
+                String goodsId = parts.length == 0 ? "" : parts[0];
+                String reservationId = parts.length < 2 ? null : parts[1];
+                if (goodsId.isEmpty()) {
+                    logger.error("MQ Broker NACK 但 correlationId 无法定位商品，跳过自动回补, correlationId={}", correlationId);
+                    return;
+                }
+                boolean restored = redisService.rollbackStockOnce(
+                        GoodsKey.getSeckillGoodsStock, goodsId, reservationId);
+                logger.error("MQ Broker NACK，Redis 库存回滚={}, goodsId={}, cause={}",
+                        restored, goodsId, cause);
             }
         });
     }
@@ -65,8 +74,8 @@ public class MQSender {
             throw new IllegalArgumentException("SeckillMessage 序列化结果为 null");
         }
         logger.info("send seckill message, goodsId={}", message.getGoodsId());
-        String goodsIdStr = String.valueOf(message.getGoodsId());
-        CorrelationData correlationData = new CorrelationData(goodsIdStr);
+        String correlationId = message.getGoodsId() + ":" + message.getReservationId();
+        CorrelationData correlationData = new CorrelationData(correlationId);
         // 默认 Exchange（""）+ 队列名作为 routing key，等价于原来的 convertAndSend(queueName, msg)
         rabbitTemplate.convertAndSend("", MQConfig.SECKILL, (Object) msg, correlationData);
     }

@@ -4,9 +4,10 @@
     <meta charset="UTF-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>闪惠智购商城 — 订单详情</title>
-    <script src="/jquery-validation/lib/jquery-1.11.1.js"></script>
+    <script src="/jquery-validation/lib/jquery-1.11.1.js"></script><script src="/js/csrf.js"></script>
     <link  rel="stylesheet" href="/bootstrap/css/bootstrap.css"/>
     <script src="/bootstrap/js/bootstrap.min.js"></script>
+    <script src="/layer/layer.js"></script>
     <style>
         body{background:#f4f4f8;font-family:'PingFang SC','Microsoft YaHei',sans-serif;margin:0;}
         .topbar{background:linear-gradient(135deg,#1a1a2e,#16213e);padding:14px 24px;
@@ -37,6 +38,7 @@
         .btn-pay{background:linear-gradient(135deg,#e74c3c,#c0392b);color:#fff;border:none;
                  border-radius:8px;padding:10px 32px;font-size:14px;font-weight:600;cursor:pointer;transition:opacity .2s;}
         .btn-pay:hover{opacity:.87;}
+        .btn-pay:disabled{opacity:.45;cursor:not-allowed;}
         .btn-back2{background:#f5f5f5;color:#666;border:none;border-radius:8px;
                    padding:10px 24px;font-size:14px;cursor:pointer;margin-right:10px;}
     </style>
@@ -44,7 +46,7 @@
 <body>
 <div class="topbar">
     <a class="brand" href="/goods/list">⚡ 闪惠<span class="accent">智购</span>商城</a>
-    <a class="back" href="/goods/list">← 继续购物</a>
+    <div style="display:flex;gap:18px;align-items:center"><a class="back" href="/order_list.htm">我的订单</a><a class="back" href="/goods/list">← 继续购物</a></div>
 </div>
 <div class="wrap">
     <div class="success-banner">
@@ -62,10 +64,13 @@
         <div class="info-row"><span class="lbl">下单时间</span><span class="val" id="createDate">—</span></div>
         <div class="info-row"><span class="lbl">订单状态</span>
             <span class="val"><span class="tag-status" id="orderStatus">—</span></span></div>
-        <div class="info-row"><span class="lbl">收货人</span><span class="val">tom &nbsp; 15008484456</span></div>
-        <div class="info-row"><span class="lbl">收货地址</span><span class="val">四川省崇州市</span></div>
+        <div class="info-row"><span class="lbl">收货人</span><span class="val" id="deliveryReceiver">—</span></div>
+        <div class="info-row"><span class="lbl">收货地址</span><span class="val" id="deliveryAddress">—</span></div>
+        <div class="info-row" id="shippingRow" style="display:none"><span class="lbl">物流信息</span><span class="val" id="shippingInfo">—</span></div>
+        <div class="info-row" id="refundRow" style="display:none"><span class="lbl">售后信息</span><span class="val" id="refundInfo">—</span></div>
         <div class="footer-btns">
             <button class="btn-back2" onclick="history.back()">返回</button>
+            <button class="btn-back2" id="refundButton" style="display:none">申请退款</button>
             <button class="btn-pay" id="payButton">立即支付</button>
         </div>
     </div>
@@ -73,37 +78,140 @@
     <img id="goodsImg" style="display:none"/>
 </div>
 <script type="text/javascript">
-    $(function(){ getOrderDetail(); });
+    var SESSION_ERROR = 500210;
+    var orderId = null;
+    var paymentSubmitting = false;
+
+    $(function(){
+        orderId = getOrderIdFromUrl();
+        $("#payButton").on("click", createPayment);
+        $("#refundButton").on("click", requestRefund);
+        if (!orderId) {
+            $("#payButton").prop("disabled", true);
+            layer.msg("订单参数无效，请返回商品列表");
+            return;
+        }
+        getOrderDetail();
+    });
+
+    function getOrderIdFromUrl() {
+        var value;
+        try { value = new URLSearchParams(window.location.search).get("orderId"); }
+        catch (e) { value = null; }
+        return /^\d+$/.test(value || "") && Number(value) > 0 ? value : null;
+    }
+
+    function redirectToLogin() {
+        var redirect = window.location.pathname + window.location.search;
+        window.location.replace("/login/index?redirect=" + encodeURIComponent(redirect));
+    }
+
+    function handleApiError(data, fallback) {
+        if (data && Number(data.code) === SESSION_ERROR) {
+            layer.msg("登录已失效，请重新登录", {time: 1000}, redirectToLogin);
+            return;
+        }
+        layer.msg((data && data.msg) || fallback || "请求失败，请稍后重试");
+    }
 
     function getOrderDetail() {
-        var orderId = getQueryString("orderId");
         $.ajax({
-            url: "/order/detail", type: "GET",
-            data: { orderId: orderId },
+            url: "/order/detail", type: "GET", data: { orderId: orderId },
             success: function (data) {
-                if (data.code == 0) { render(data.data); }
-                else { layer.msg(data.msg); }
+                if (data && Number(data.code) === 0 && data.data) { render(data.data); }
+                else { $("#payButton").prop("disabled", true); handleApiError(data, "订单加载失败"); }
             },
-            error: function () { layer.msg("请求有误！"); }
+            error: function () { $("#payButton").prop("disabled", true); layer.msg("订单加载失败，请稍后重试"); }
         });
     }
 
     function render(detail) {
-        var goods = detail.goodsVo;
-        var order = detail.order;
-        $("#goodsName").text(goods.goodsName);
-        $("#goodsImg").attr("src", goods.goodsImg);
+        var goods = detail && detail.goodsVo;
+        var order = detail && detail.order;
+        if (!goods || !order) { $("#payButton").prop("disabled", true); layer.msg("订单信息不完整"); return; }
+        $("#goodsName").text(goods.goodsName || "—");
+        $("#goodsImg").attr("src", goods.goodsImg || "");
         $("#goodsPrice").text(order.goodsPrice);
-        $("#createDate").text(order.createDate);
-        var statusMap = {0:"待支付", 1:"待发货", 2:"已发货", 3:"待收货"};
+        $("#createDate").text(order.createDate || "—");
+        var statusMap = {0:"待支付", 1:"待发货", 2:"已发货", 3:"已收货", 4:"已关闭", 5:"已完成", 6:"已退款"};
         $("#orderStatus").text(statusMap[order.orderStatus] || "未知状态");
+        $("#deliveryReceiver").text((order.deliveryReceiverName || "—") + " " + (order.deliveryReceiverMobile || ""));
+        $("#deliveryAddress").text(order.deliveryAddress || "—");
+        if (order.trackingNumber) {
+            var shipping = (order.shippingCompany || "物流公司") + " " + order.trackingNumber;
+            if (order.shippedDate) shipping += "（发货时间：" + order.shippedDate + "）";
+            $("#shippingInfo").text(shipping);
+            $("#shippingRow").show();
+        } else {
+            $("#shippingRow").hide();
+        }
+        if (order.refundRequestDate) {
+            var refund = (order.refundReason || "已提交退款申请");
+            if (order.refundDate) refund += "（退款时间：" + order.refundDate + "）";
+            $("#refundInfo").text(refund);
+            $("#refundRow").show();
+        } else {
+            $("#refundRow").hide();
+        }
+        var canRefund = [1,2,3,5].indexOf(Number(order.orderStatus)) >= 0 && !order.refundRequestDate;
+        $("#refundButton").toggle(canRefund);
+        $("#payButton").prop("disabled", Number(order.orderStatus) !== 0)
+            .text(Number(order.orderStatus) === 0 ? "立即支付" : "订单不可支付");
     }
 
-    function getQueryString(name) {
-        var reg = new RegExp("(^|&)" + name + "=([^&]*)(&|$)");
-        var r = window.location.search.substr(1).match(reg);
-        if (r != null) { return unescape(r[2]); }
-        return null;
+    // 支付后端按规划提供后，此页先创建模拟支付，再用返回的支付标识发起回调。
+    function createPayment() {
+        if (paymentSubmitting || !orderId) { return; }
+        setPaymentSubmitting(true, "正在创建支付...");
+        $.ajax({
+            url: "/payment/mock/create", type: "POST", data: { orderId: orderId },
+            success: function (data) {
+                if (data && Number(data.code) === 0) { confirmPayment(data.data); }
+                else { setPaymentSubmitting(false); handleApiError(data, "创建支付失败"); }
+            },
+            error: function () { setPaymentSubmitting(false); layer.msg("创建支付失败，请稍后重试"); }
+        });
+    }
+
+    function confirmPayment(payment) {
+        if (!payment || typeof payment !== "object" || !payment.paymentNo) {
+            setPaymentSubmitting(false);
+            layer.msg("支付单创建结果无效，请稍后重试");
+            return;
+        }
+        layer.confirm("模拟支付已创建，是否确认支付成功？", {btn:["确认支付", "取消"]}, function(index) {
+            layer.close(index);
+            setPaymentSubmitting(true, "正在确认支付...");
+            var callbackData = {
+                paymentNo: payment.paymentNo,
+                transactionId: "MOCK-TXN-" + Date.now() + "-" + Math.floor(Math.random() * 1000000)
+            };
+            $.ajax({
+                url: "/payment/mock/callback", type: "POST", contentType: "application/json",
+                data: JSON.stringify(callbackData),
+                success: function (data) {
+                    if (data && Number(data.code) === 0) {
+                        layer.msg("支付成功", {time: 1000}, function(){ window.location.reload(); });
+                    } else { setPaymentSubmitting(false); handleApiError(data, "支付确认失败"); }
+                },
+                error: function () { setPaymentSubmitting(false); layer.msg("支付确认失败，请稍后重试"); }
+            });
+        }, function() { setPaymentSubmitting(false); });
+    }
+
+    function setPaymentSubmitting(value, text) {
+        paymentSubmitting = value;
+        $("#payButton").prop("disabled", value).text(text || "立即支付");
+    }
+
+    function requestRefund() {
+        var reason = window.prompt("请输入退款原因");
+        if (reason === null) return;
+        reason = $.trim(reason);
+        if (!reason) { layer.msg("退款原因不能为空"); return; }
+        $.ajax({url:"/order/refund", type:"POST", data:{orderId:orderId, reason:reason},
+            success:function(data){if(data&&Number(data.code)===0){layer.msg("退款申请已提交",{time:800},getOrderDetail);}else handleApiError(data,"退款申请失败");},
+            error:function(){layer.msg("退款申请失败，请稍后重试");}});
     }
 </script>
 </body>

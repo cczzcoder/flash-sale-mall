@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>收货地址</title>
+    <script src="/jquery-validation/lib/jquery-1.11.1.js"></script><script src="/js/csrf.js"></script>
+    <script src="/layer/layer.js"></script>
+    <style>
+        body{margin:0;background:#f4f4f8;font-family:'Microsoft YaHei',sans-serif;color:#333}
+        .bar{background:#1a1a2e;color:#fff;padding:16px 24px}.bar a{color:#fff;text-decoration:none}
+        .wrap{max-width:760px;margin:28px auto;padding:0 16px}.panel{background:#fff;padding:20px;margin-bottom:16px;border-radius:8px}
+        h2{font-size:20px;margin:0 0 18px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+        input{box-sizing:border-box;width:100%;padding:10px;border:1px solid #ddd;border-radius:4px}
+        .wide{grid-column:1/-1}.row{border-top:1px solid #eee;padding:14px 0;display:flex;gap:12px;align-items:flex-start}
+        .content{flex:1;line-height:1.6}.actions{white-space:nowrap}button{border:0;border-radius:4px;padding:8px 12px;cursor:pointer}
+        .primary{background:#e74c3c;color:#fff}.danger{background:#fbe9e7;color:#c0392b}.muted{color:#888;font-size:12px}
+        @media(max-width:560px){.grid{grid-template-columns:1fr}.wide{grid-column:auto}.actions{display:flex;flex-direction:column}}
+    </style>
+</head>
+<body>
+<div class="bar"><a href="/goods/list">闪惠智购商城</a></div>
+<div class="wrap">
+    <div class="panel">
+        <h2>收货地址</h2>
+        <form id="addressForm">
+            <input type="hidden" id="addressId"/>
+            <div class="grid">
+                <input id="receiverName" placeholder="收货人姓名" required maxlength="32"/>
+                <input id="receiverMobile" placeholder="手机号" required maxlength="11"/>
+                <input id="province" placeholder="省" required maxlength="32"/>
+                <input id="city" placeholder="市" required maxlength="32"/>
+                <input id="district" placeholder="区/县" required maxlength="32"/>
+                <input id="detail" class="wide" placeholder="详细地址" required maxlength="128"/>
+            </div>
+            <p><label><input type="checkbox" id="defaultAddress" style="width:auto"/> 设为默认地址</label></p>
+            <button class="primary" type="submit">保存地址</button>
+            <button type="button" onclick="resetForm()">清空</button>
+        </form>
+    </div>
+    <div class="panel"><div id="addressList"><span class="muted">加载中...</span></div></div>
+</div>
+<script>
+function apiError(data){ if(data&&Number(data.code)===500210){ location.href='/login/index?redirect='+encodeURIComponent(location.pathname); return; } layer.msg((data&&data.msg)||'请求失败'); }
+function load(){ $.get('/address/list',function(data){ if(!data||Number(data.code)!==0){apiError(data);return;} var box=$('#addressList').empty(); if(!data.data.length){box.text('暂无地址');return;} $.each(data.data,function(_,a){ var row=$('<div class="row">'); var content=$('<div class="content">').text(a.receiverName+' '+a.receiverMobile+' '+a.province+a.city+a.district+a.detail); if(a.defaultAddress) content.append($('<div class="muted">默认地址</div>')); var actions=$('<div class="actions">'); actions.append($('<button type="button">编辑</button>').on('click',function(){edit(a);})); actions.append($('<button type="button" class="danger">删除</button>').on('click',function(){removeAddress(a.id);})); row.append(content,actions); box.append(row); }); }).fail(function(){layer.msg('地址加载失败');}); }
+function edit(a){ $('#addressId').val(a.id); $('#receiverName').val(a.receiverName); $('#receiverMobile').val(a.receiverMobile); $('#province').val(a.province); $('#city').val(a.city); $('#district').val(a.district); $('#detail').val(a.detail); $('#defaultAddress').prop('checked',!!a.defaultAddress); window.scrollTo(0,0); }
+function resetForm(){ $('#addressForm')[0].reset(); $('#addressId').val(''); }
+function removeAddress(id){ if(!confirm('确认删除该地址？'))return; $.post('/address/delete',{addressId:id},function(data){if(data&&Number(data.code)===0)load();else apiError(data);}); }
+$('#addressForm').on('submit',function(e){e.preventDefault(); var mobile=$.trim($('#receiverMobile').val()); if(!/^1[3-9]\d{9}$/.test(mobile)){layer.msg('手机号格式不正确');return;} var data={id:$('#addressId').val()||null,receiverName:$.trim($('#receiverName').val()),receiverMobile:mobile,province:$.trim($('#province').val()),city:$.trim($('#city').val()),district:$.trim($('#district').val()),detail:$.trim($('#detail').val()),defaultAddress:$('#defaultAddress').prop('checked')}; $.ajax({url:'/address/save',type:'POST',data:data,success:function(result){if(result&&Number(result.code)===0){resetForm();load();}else apiError(result);}});});
+load();
+</script>
+</body>
+</html>
