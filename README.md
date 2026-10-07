@@ -11,9 +11,28 @@
 - **页面静态化**：缓存秒杀页面到浏览器，减少服务器压力。
 
 ## 技术架构图
+
 系统架构与链路说明见 `doc/技术文档.md`。
 
 高并发优化路线和分阶段验收标准见 `doc/高并发优化计划.md`。
+
+### 核心数据模型（含商家体系）
+
+```mermaid
+erDiagram
+    seckill_user ||--o| shop : "owner_user_id 唯一，1 人最多 1 店"
+    seckill_user ||--o{ seckill_order : user_id
+    seckill_user ||--o{ delivery_address : user_id
+    seckill_user ||--o{ order_info : user_id
+    shop ||--o{ goods : "shop_id，NULL = 平台自营"
+    goods ||--o{ seckill_goods : goods_id
+    goods ||--o{ seckill_order : goods_id
+    order_info ||--o| seckill_order : order_id
+```
+
+-   角色：`seckill_user.role` = 0 普通用户 / 1 商家 / 9 平台管理员；平台管理员另有独立的 `admin_user` 表。
+-   商家经平台审核后开店（`shop.status` = 0 待审核 / 1 营业中 / 2 停用），商品通过 `goods.shop_id` 归属店铺，NULL 表示平台自营。
+-   秒杀订单 `seckill_order` 通过唯一索引 `(user_id, goods_id)` 兜底防重复下单，并通过 `order_id` 关联 `order_info` 支付/履约主表。
 
 ## 运行环境
 
@@ -69,6 +88,7 @@ git clone https://github.com/pitt1997/seckill
 -   我的订单：`http://localhost:8080/order_list.htm`
 -   收货地址：`http://localhost:8080/address.htm`
 -   管理后台：`http://localhost:8080/admin.htm`
+-   商家后台：`http://localhost:8080/merchant.htm`（普通用户可提交入驻申请，平台审核通过后开通商家角色，管理自家店铺商品）
 -   秒杀成功后可在订单详情页完成模拟支付；管理员发货后，用户可在“我的订单”中确认收货并完成订单。已支付订单也可提交退款申请，由管理员在后台审核通过后标记为已退款（演示流程不接触真实资金）。
 -   管理员账户不会写入默认密码。请按 `sql/migration/README.md` 的说明，用 `MD5Util.inputPassToDbPass` 生成密码后插入 `admin_user` 表，再登录管理后台。
 
@@ -134,6 +154,54 @@ git clone https://github.com/pitt1997/seckill
 
 -   **秒杀商品管理**：管理员可以增加、修改商品资料和秒杀时间；已有商品的库存通过“补货”操作增加，编辑资料不会覆盖秒杀剩余库存。
 -   **用户管理**：管理员可以查看所有用户的秒杀记录。
+-   **店铺审核**：审核商家入驻申请（通过后授予商家角色）、停用/恢复店铺。
+
+### 4. 商家模块
+
+-   **入驻申请**：普通用户提交店铺名称与简介，等待平台审核（`/merchant.htm`）。
+-   **商品管理**：商家可发布、编辑自家店铺的秒杀商品与活动时间，库存通过“补货”操作增加。
+-   **权限隔离**：商家只能操作 `shop_id` 等于自己店铺的商品，服务端对每次写操作做归属校验。
+
+## 安全设计
+
+### 平台级管理员 + 商家级权限隔离
+
+| 角色 | 判定依据 | 入口 | 权限范围 |
+|------|----------|------|----------|
+| 普通用户 | `seckill_user.role` = 0 | 商城前台 | 秒杀下单、订单、收货地址、提交商家入驻申请 |
+| 商家 | `seckill_user.role` = 1 且店铺营业中 | `/merchant.htm` + `/merchant/*` | 只能管理自己店铺（`goods.shop_id` 匹配）的商品 |
+| 平台管理员 | `admin_user` 表 + `X-Admin-Token` 请求头 | `/admin.htm` + `/admin/*` | 店铺审核、全平台商品/订单/发货/退款管理 |
+
+商家接口的防护链路（`MerchantController` + `AdminGoodsService`）：
+
+1. **登录校验**：解析分布式 Session，未登录返回 `SESSION_ERROR`；
+2. **入驻校验**：无店铺记录或审核未通过时拒绝进入（待审核/停用有对应提示）；
+3. **营业状态校验**：店铺 `status != 1` 不可进行任何操作；
+4. **服务端归属校验**：每次商品写操作调用 `checkShopScope` 核对 `goods.shop_id`，不属于当前商家则返回 `GOODS_FORBIDDEN(500516)`——前端被绕过伪造参数也无法改动他人商品（已用负向冒烟用例验证：商家 B 修改商家 A 的商品被拦截且数据未变）。
+
+其他安全基线：双重 MD5 + 随机盐存密、token 走 HttpOnly Cookie（浏览器）或 `Authorization` 头（API）、写操作双提交 CSRF 保护、公开接口 `@AccessLimit` 限流。
+
+## 缓存防御
+
+### 缓存穿透（已落地）
+
+-   **风险**：`GET /goods/detailStatic/{goodsId}` 是无缓存的公开接口，脚本可用不存在的 ID 持续刷库。
+-   **解法**：
+    1. 接口入口加 `@AccessLimit(seconds = 1, maxCount = 10, needLogin = false)`，按 IP 每秒最多 10 次；
+    2. DB 查不到的 ID 写入 60s 空值缓存（`GoodsKey:gn{goodsId}`），后续请求直接短路返回 `GOODS_NOT_EXIST`，不再落到 DB。
+-   不引入布隆过滤器：单体 MVP 场景下性价比低（杀鸡用牛刀）。
+
+### 缓存击穿（已落地）
+
+-   **风险**：商品列表页 HTML 缓存（`GoodsKey:gl`，TTL 60s）恰好过期瞬间，高并发请求同时查库 + 渲染模板，可能打满 DB 连接池。
+-   **解法**：SETNX 单飞锁（`GoodsKey:gll`，TTL 5s，`RedisService.setIfAbsent`）——
+    - 抢到锁的请求负责查库、渲染并写回缓存，`finally` 中释放锁（渲染失败也会释放，避免锁悬挂）；
+    - 未抢到锁的请求 `sleep 100ms` 后重试读缓存；若仍未命中则降级为自行渲染，保证接口始终可用。
+
+### 缓存雪崩（暂不处理）
+
+-   热 key 只有列表页缓存一个（TTL 60s），不存在大量 key 同时过期；秒杀库存 key（`GoodsKey:gs`）永不过期且启动时预热（`setIfAbsent`，重启不会覆盖已扣减的库存）。
+-   后续可选加固：Redis 连接配置 200ms 级超时，实现快速失败 + 降级兜底，当前 MVP 阶段不引入。
 
 * * *
 
