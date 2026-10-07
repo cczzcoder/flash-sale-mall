@@ -32,9 +32,13 @@ public class GoodsVo extends Goods {
     private Integer version;
     /** 秒杀价格 */
     private Double seckillPrice;
+    /** 所属店铺名称，NULL/空 表示平台自营（由列表查询 join 填充） */
+    private String shopName;
 
     public Double  getSeckillPrice()              { return seckillPrice; }
     public void    setSeckillPrice(Double v)      { this.seckillPrice = v; }
+    public String  getShopName()                  { return shopName; }
+    public void    setShopName(String v)          { this.shopName = v; }
     public Integer getStockCount()                { return stockCount; }
     public void    setStockCount(Integer v)       { this.stockCount = v; }
     public Date    getStartDate()                 { return startDate; }

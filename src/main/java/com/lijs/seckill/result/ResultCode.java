@@ -44,12 +44,20 @@ public class ResultCode {
     public static ResultCode ADDRESS_REQUIRED  = new ResultCode(500219, "请先设置收货地址!");
     public static ResultCode ADMIN_AUTH_FAILED = new ResultCode(500220, "管理员认证失败!");
     public static ResultCode CSRF_ERROR       = new ResultCode(500222, "请求令牌无效!");
+    public static ResultCode SHOP_ALREADY_APPLIED = new ResultCode(500223, "已提交过入驻申请，请勿重复提交!");
+    public static ResultCode SHOP_NOT_APPLIED = new ResultCode(500224, "尚未入驻，请先提交入驻申请!");
+    public static ResultCode SHOP_NOT_ACTIVE  = new ResultCode(500225, "店铺未通过审核或已停用!");
+    public static ResultCode SHOP_NAME_INVALID = new ResultCode(500226, "店铺名称不能为空!");
+    public static ResultCode SHOP_STATUS_INVALID = new ResultCode(500227, "店铺状态无效!");
+    public static ResultCode SHOP_NOT_EXIST   = new ResultCode(500228, "店铺不存在!");
     public static ResultCode GOODS_NOT_EXIST   = new ResultCode(500510, "商品不存在!");
     public static ResultCode GOODS_IN_USE      = new ResultCode(500511, "商品已有订单，不能删除!");
     public static ResultCode GOODS_TIME_INVALID = new ResultCode(500512, "秒杀时间范围无效!");
     public static ResultCode GOODS_PRICE_INVALID = new ResultCode(500513, "秒杀价不能高于商品原价!");
     public static ResultCode GOODS_STOCK_INVALID = new ResultCode(500514, "补货数量必须大于0!");
     public static ResultCode GOODS_STOCK_EDIT_FORBIDDEN = new ResultCode(500515, "已有商品不能直接覆盖库存，请使用补货操作!");
+    /** 商家越权操作不属于自己店铺的商品 */
+    public static ResultCode GOODS_FORBIDDEN   = new ResultCode(500516, "无权操作该商品!");
 
     // ----------------------------- 订单 -----------------------------
     public static ResultCode ORDER_NOT_EXIST   = new ResultCode(500410, "订单不存在!");

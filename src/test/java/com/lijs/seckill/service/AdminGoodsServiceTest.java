@@ -1,12 +1,14 @@
 package com.lijs.seckill.service;
 
 import com.lijs.seckill.dao.AdminGoodsDao;
+import com.lijs.seckill.domain.Goods;
 import com.lijs.seckill.redis.RedisService;
 import com.lijs.seckill.result.ResultCode;
 import com.lijs.seckill.vo.AdminGoodsVo;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -111,6 +113,80 @@ class AdminGoodsServiceTest {
         assertEquals(ResultCode.GOODS_STOCK_INVALID.getCode(), service.restock(4L, 0).getCode());
         verify(goodsDao, never()).get(anyLong());
         verify(redisService, never()).increaseBy(any(), anyString(), anyInt());
+    }
+
+    @Test
+    void merchantCannotEditGoodsOwnedByAnotherShop() {
+        AdminGoodsVo vo = validGoods();
+        vo.setGoodsId(4L);
+        com.lijs.seckill.vo.GoodsVo current = new com.lijs.seckill.vo.GoodsVo();
+        current.setId(4L);
+        current.setShopId(8L);
+        current.setStockCount(10);
+        when(goodsDao.get(4L)).thenReturn(current);
+
+        assertEquals(ResultCode.GOODS_FORBIDDEN.getCode(), service.save(vo, 9L).getCode());
+        verify(goodsDao, never()).updateGoods(any());
+        verify(goodsDao, never()).updateSeckill(any());
+    }
+
+    @Test
+    void merchantCanEditOwnGoods() {
+        AdminGoodsVo vo = validGoods();
+        vo.setGoodsId(4L);
+        com.lijs.seckill.vo.GoodsVo current = new com.lijs.seckill.vo.GoodsVo();
+        current.setId(4L);
+        current.setShopId(8L);
+        current.setStockCount(10);
+        when(goodsDao.get(4L)).thenReturn(current);
+        when(goodsDao.updateGoods(any())).thenReturn(1);
+        when(goodsDao.updateSeckill(any())).thenReturn(1);
+
+        assertEquals(ResultCode.SUCCESS.getCode(), service.save(vo, 8L).getCode());
+        verify(goodsDao).updateGoods(any());
+    }
+
+    @Test
+    void merchantCreatedGoodsIsBoundToHisShop() {
+        AdminGoodsVo vo = validGoods();
+        when(goodsDao.insertGoods(any())).thenReturn(1);
+        when(goodsDao.insertSeckill(any())).thenReturn(1);
+
+        assertEquals(ResultCode.SUCCESS.getCode(), service.save(vo, 8L).getCode());
+
+        ArgumentCaptor<Goods> captor = ArgumentCaptor.forClass(Goods.class);
+        verify(goodsDao).insertGoods(captor.capture());
+        assertEquals(Long.valueOf(8L), captor.getValue().getShopId());
+        verify(redisService).set(any(), anyString(), any());
+    }
+
+    @Test
+    void merchantCannotRestockOrDeleteForeignGoods() {
+        com.lijs.seckill.vo.GoodsVo current = new com.lijs.seckill.vo.GoodsVo();
+        current.setId(4L);
+        current.setShopId(8L);
+        when(goodsDao.get(4L)).thenReturn(current);
+
+        assertEquals(ResultCode.GOODS_FORBIDDEN.getCode(), service.restock(4L, 5, 9L).getCode());
+        assertEquals(ResultCode.GOODS_FORBIDDEN.getCode(), service.delete(4L, 9L).getCode());
+        verify(goodsDao, never()).increaseSeckillStock(anyLong(), anyInt());
+        verify(goodsDao, never()).deleteGoods(anyLong());
+    }
+
+    @Test
+    void platformAdminScopeNullCanEditAnyGoods() {
+        AdminGoodsVo vo = validGoods();
+        vo.setGoodsId(4L);
+        com.lijs.seckill.vo.GoodsVo current = new com.lijs.seckill.vo.GoodsVo();
+        current.setId(4L);
+        current.setShopId(8L);
+        current.setStockCount(10);
+        when(goodsDao.get(4L)).thenReturn(current);
+        when(goodsDao.updateGoods(any())).thenReturn(1);
+        when(goodsDao.updateSeckill(any())).thenReturn(1);
+
+        assertEquals(ResultCode.SUCCESS.getCode(), service.save(vo).getCode());
+        verify(goodsDao).updateGoods(any());
     }
 
     private AdminGoodsVo validGoods() {

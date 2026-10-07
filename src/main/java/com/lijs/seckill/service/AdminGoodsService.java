@@ -14,7 +14,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
-import java.util.Date;
 import java.util.List;
 
 @Service
@@ -32,8 +31,24 @@ public class AdminGoodsService {
 
     public List<GoodsVo> list() { return goodsDao.list(); }
 
+    /** 商家工作台使用：只返回指定店铺的商品。 */
+    public List<GoodsVo> listByShop(long shopId) { return goodsDao.listByShopId(shopId); }
+
     @Transactional
     public ResultCode save(AdminGoodsVo vo) {
+        return doSave(vo, null);
+    }
+
+    /**
+     * 商家保存商品。scopeShopId 非空时强制归属校验：
+     * 新建商品自动挂到该店铺；编辑已有商品时必须已属于该店铺，防止越权改他人商品。
+     */
+    @Transactional
+    public ResultCode save(AdminGoodsVo vo, Long scopeShopId) {
+        return doSave(vo, scopeShopId);
+    }
+
+    private ResultCode doSave(AdminGoodsVo vo, Long scopeShopId) {
         if (vo.getStartDate().compareTo(vo.getEndDate()) >= 0) {
             return ResultCode.GOODS_TIME_INVALID;
         }
@@ -44,6 +59,8 @@ public class AdminGoodsService {
         if (vo.getGoodsId() != null) {
             current = goodsDao.get(vo.getGoodsId());
             if (current == null) return ResultCode.GOODS_NOT_EXIST;
+            ResultCode scopeError = checkShopScope(current, scopeShopId);
+            if (scopeError != ResultCode.SUCCESS) return scopeError;
             // 编辑商品资料不能覆盖秒杀剩余库存；库存必须走补货接口，避免重置 Redis 预扣量。
             if (!sameStock(vo.getStockCount(), current.getStockCount())) {
                 return ResultCode.GOODS_STOCK_EDIT_FORBIDDEN;
@@ -58,6 +75,8 @@ public class AdminGoodsService {
         goods.setGoodsDetail(vo.getGoodsDetail());
         goods.setGoodsPrice(vo.getGoodsPrice());
         goods.setGoodsStock(current == null ? vo.getStockCount() : current.getGoodsStock());
+        // 平台管理员新建的商品为自营（shopId=null）；商家新建自动归属其店铺
+        goods.setShopId(scopeShopId);
         SeckillGoods seckill = new SeckillGoods();
         seckill.setGoodsId(vo.getGoodsId());
         seckill.setSeckillPrice(vo.getSeckillPrice());
@@ -83,12 +102,33 @@ public class AdminGoodsService {
         return ResultCode.SUCCESS;
     }
 
+    /** scopeShopId 非空时校验商品归属，平台管理员传 null 表示不限制。 */
+    private ResultCode checkShopScope(GoodsVo current, Long scopeShopId) {
+        if (scopeShopId != null && !scopeShopId.equals(current.getShopId())) {
+            return ResultCode.GOODS_FORBIDDEN;
+        }
+        return ResultCode.SUCCESS;
+    }
+
     /** 只允许正向补货，DB 成功提交后再增加 Redis，避免事务回滚造成缓存虚增。 */
     @Transactional
     public ResultCode restock(long goodsId, int count) {
+        return doRestock(goodsId, count, null);
+    }
+
+    /** 商家补货：商品必须属于该店铺，防止越权给他店商品补货。 */
+    @Transactional
+    public ResultCode restock(long goodsId, int count, Long scopeShopId) {
+        return doRestock(goodsId, count, scopeShopId);
+    }
+
+    private ResultCode doRestock(long goodsId, int count, Long scopeShopId) {
         if (goodsId <= 0) return ResultCode.GOODS_NOT_EXIST;
         if (count <= 0) return ResultCode.GOODS_STOCK_INVALID;
-        if (goodsDao.get(goodsId) == null) return ResultCode.GOODS_NOT_EXIST;
+        GoodsVo current = goodsDao.get(goodsId);
+        if (current == null) return ResultCode.GOODS_NOT_EXIST;
+        ResultCode scopeError = checkShopScope(current, scopeShopId);
+        if (scopeError != ResultCode.SUCCESS) return scopeError;
         if (goodsDao.increaseSeckillStock(goodsId, count) != 1
                 || goodsDao.increaseGoodsStock(goodsId, count) != 1) {
             return ResultCode.SERVER_ERROR;
@@ -124,7 +164,20 @@ public class AdminGoodsService {
 
     @Transactional
     public ResultCode delete(long goodsId) {
-        if (goodsDao.get(goodsId) == null) return ResultCode.GOODS_NOT_EXIST;
+        return doDelete(goodsId, null);
+    }
+
+    /** 商家删除商品：商品必须属于该店铺，防止越权删除他店商品。 */
+    @Transactional
+    public ResultCode delete(long goodsId, Long scopeShopId) {
+        return doDelete(goodsId, scopeShopId);
+    }
+
+    private ResultCode doDelete(long goodsId, Long scopeShopId) {
+        GoodsVo current = goodsDao.get(goodsId);
+        if (current == null) return ResultCode.GOODS_NOT_EXIST;
+        ResultCode scopeError = checkShopScope(current, scopeShopId);
+        if (scopeError != ResultCode.SUCCESS) return scopeError;
         if (goodsDao.countOrders(goodsId) > 0) return ResultCode.GOODS_IN_USE;
         goodsDao.deleteSeckill(goodsId);
         goodsDao.deleteGoods(goodsId);

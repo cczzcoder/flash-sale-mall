@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>商家中心</title>
+    <script src="/jquery-validation/lib/jquery-1.11.1.js"></script><script src="/js/csrf.js"></script>
+    <style>
+        body{margin:0;background:#f4f4f8;color:#222;font-family:'Microsoft YaHei',sans-serif}.bar{background:#1a1a2e;color:#fff;padding:16px 24px}
+        .bar a{float:right;color:rgba(255,255,255,.8);text-decoration:none;font-size:13px}.bar a:hover{color:#fff}
+        .wrap{max-width:1100px;margin:24px auto;padding:0 16px}.panel{background:#fff;border-radius:8px;padding:18px;margin-bottom:16px}
+        h2{font-size:18px;margin:0 0 16px}.login{max-width:420px;margin:60px auto}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+        input,textarea{box-sizing:border-box;width:100%;padding:9px;border:1px solid #ddd;border-radius:4px}textarea{min-height:70px}.wide{grid-column:1/-1}
+        button{border:0;border-radius:4px;padding:9px 14px;cursor:pointer}.primary{background:#e74c3c;color:#fff}.danger{background:#fbe9e7;color:#c0392b}
+        table{border-collapse:collapse;width:100%;font-size:13px}th,td{border-bottom:1px solid #eee;text-align:left;padding:9px 6px}th{color:#888;font-weight:normal}.muted{color:#888;font-size:12px}
+        .tag{display:inline-block;border-radius:10px;padding:2px 10px;font-size:12px}.tag-pending{background:#fff7e6;color:#d48806}.tag-active{background:#f6ffed;color:#389e0d}.tag-disabled{background:#fff1f0;color:#cf1322}
+        @media(max-width:700px){.grid{grid-template-columns:1fr}.wide{grid-column:auto}table{display:block;overflow:auto;white-space:nowrap}}
+    </style>
+</head>
+<body>
+<div class="bar">闪惠智购 · 商家中心 <a href="/goods/list">返回商城</a></div>
+<div class="wrap">
+    <section class="panel login" id="loginPanel" style="display:none">
+        <h2>请先登录</h2>
+        <p class="muted">商家中心需要登录后使用。</p>
+        <button class="primary" id="goLogin">去登录</button>
+    </section>
+    <section class="panel login" id="applyPanel" style="display:none">
+        <h2>申请入驻</h2>
+        <input id="shopName" placeholder="店铺名称（必填）"/><br/><br/>
+        <input id="shopLogo" placeholder="店铺 Logo 图片地址（选填）"/><br/><br/>
+        <textarea id="shopDescription" placeholder="店铺简介（选填）"></textarea><br/><br/>
+        <button class="primary" id="applyButton">提交入驻申请</button>
+        <span id="applyError" class="muted"></span>
+    </section>
+    <section class="panel login" id="pendingPanel" style="display:none">
+        <h2>入驻审核中</h2>
+        <p>店铺「<span id="pendingName"></span>」已提交申请，请等待平台审核。</p>
+        <p class="muted">审核通过后刷新本页，即可开始上架商品。</p>
+    </section>
+    <section class="panel login" id="disabledPanel" style="display:none">
+        <h2>店铺已停用</h2>
+        <p>店铺「<span id="disabledName"></span>」当前已被平台停用，如有疑问请联系管理员。</p>
+    </section>
+    <div id="console" style="display:none">
+        <section class="panel"><h2>我的店铺</h2><div id="shopInfo" class="muted"></div></section>
+        <section class="panel"><h2>商品与秒杀活动</h2>
+            <form id="goodsForm">
+                <input type="hidden" id="goodsId"/>
+                <div class="grid">
+                    <input id="goodsName" placeholder="商品名称" required/>
+                    <input id="goodsTitle" placeholder="商品标题" required/>
+                    <input id="goodsImg" placeholder="图片路径"/>
+                    <input id="goodsPrice" type="number" step="0.01" placeholder="原价" required/>
+                    <input id="seckillPrice" type="number" step="0.01" placeholder="秒杀价" required/>
+                    <input id="stockCount" type="number" min="0" placeholder="库存" required/>
+                    <input id="startDate" type="datetime-local" required/>
+                    <input id="endDate" type="datetime-local" required/>
+                    <textarea id="goodsDetail" class="wide" placeholder="商品详情"></textarea>
+                </div><br/>
+                <button class="primary" type="submit">保存</button>
+                <button type="button" onclick="resetGoods()">清空</button>
+                <span class="muted">提示：已有商品不能直接改库存，请用「补货」；保存后商城列表立即生效。</span>
+            </form>
+            <div id="goodsTable" style="margin-top:18px"></div>
+        </section>
+    </div>
+</div>
+<script>
+var SESSION_ERROR=500210, SHOP_NOT_APPLIED=500224, SHOP_NOT_ACTIVE=500225;
+function escapeHtml(v){return $('<div>').text(v==null?'':v).html();}
+function goLogin(){location.href='/login/index?redirect='+encodeURIComponent('/merchant.htm');}
+function show(id){$('#loginPanel,#applyPanel,#pendingPanel,#disabledPanel,#console').hide();$('#'+id).show();}
+function fail(data){
+    var code=data?Number(data.code):-1;
+    if(code===SESSION_ERROR){goLogin();return;}
+    if(code===SHOP_NOT_APPLIED||code===SHOP_NOT_ACTIVE){boot();return;}
+    alert((data&&data.msg)||'请求失败');
+}
+function boot(){
+    $.ajax({url:'/merchant/shop',success:function(data){
+        if(!data||Number(data.code)!==0){fail(data);return;}
+        var shop=data.data;
+        if(!shop){show('applyPanel');return;}
+        var status=Number(shop.status);
+        if(status===0){$('#pendingName').text(shop.name);show('pendingPanel');return;}
+        if(status===2){$('#disabledName').text(shop.name);show('disabledPanel');return;}
+        $('#shopInfo').html('<b>'+escapeHtml(shop.name)+'</b>（店铺ID：'+shop.id+'）<span class="tag tag-active">营业中</span>'
+            +(shop.description?'<br/>'+escapeHtml(shop.description):''));
+        show('console');loadGoods();
+    }});
+}
+$('#goLogin').on('click',goLogin);
+$('#applyButton').on('click',function(){
+    var name=$.trim($('#shopName').val());
+    if(!name){$('#applyError').text('请填写店铺名称');return;}
+    $.post('/merchant/apply',{name:name,logo:$.trim($('#shopLogo').val()),description:$.trim($('#shopDescription').val())},function(data){
+        if(data&&Number(data.code)===0){alert('入驻申请已提交，请等待平台审核');boot();}
+        else $('#applyError').text((data&&data.msg)||'提交失败');
+    }).fail(function(){$('#applyError').text('提交失败，请稍后重试');});
+});
+function dateValue(id){return $('#'+id).val().replace('T',' ')+':00';}
+function toLocalInput(v){var d=new Date(v);if(isNaN(d.getTime()))return '';function p(n){return(n<10?'0':'')+n;}return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes());}
+function payload(){return {goodsId:$('#goodsId').val()||null,goodsName:$.trim($('#goodsName').val()),goodsTitle:$.trim($('#goodsTitle').val()),goodsImg:$('#goodsImg').val(),goodsDetail:$('#goodsDetail').val(),goodsPrice:$('#goodsPrice').val(),seckillPrice:$('#seckillPrice').val(),stockCount:$('#stockCount').val(),startDate:dateValue('startDate'),endDate:dateValue('endDate')};}
+function loadGoods(){$.ajax({url:'/merchant/goods/list',success:function(data){if(!data||Number(data.code)!==0){fail(data);return;}var html='<table><tr><th>ID</th><th>商品</th><th>秒杀价</th><th>库存</th><th>时间</th><th></th></tr>';$.each(data.data,function(_,g){html+='<tr><td>'+g.id+'</td><td>'+escapeHtml(g.goodsName)+'</td><td>'+g.seckillPrice+'</td><td>'+g.stockCount+'</td><td>'+g.startDate+' ~ '+g.endDate+'</td><td><button onclick="editGoods('+g.id+')">编辑</button> <button onclick="restockGoods('+g.id+')">补货</button> <button class="danger" onclick="deleteGoods('+g.id+')">删除</button></td></tr>';});$('#goodsTable').html(html+'</table>');}});}
+function editGoods(id){$.ajax({url:'/merchant/goods/list',success:function(data){if(!data||Number(data.code)!==0){fail(data);return;}var g=$.grep(data.data,function(x){return Number(x.id)===Number(id);})[0];if(g){$('#goodsId').val(g.id);$('#goodsName').val(g.goodsName);$('#goodsTitle').val(g.goodsTitle);$('#goodsImg').val(g.goodsImg);$('#goodsDetail').val(g.goodsDetail);$('#goodsPrice').val(g.goodsPrice);$('#seckillPrice').val(g.seckillPrice);$('#stockCount').val(g.stockCount);$('#startDate').val(toLocalInput(g.startDate));$('#endDate').val(toLocalInput(g.endDate));window.scrollTo(0,0);}}});}
+function resetGoods(){$('#goodsForm')[0].reset();$('#goodsId').val('');}
+function deleteGoods(id){if(!confirm('确认删除商品？'))return;$.ajax({url:'/merchant/goods/delete',type:'POST',data:{goodsId:id},success:function(data){if(data&&Number(data.code)===0)loadGoods();else fail(data);}});}
+function restockGoods(id){var count=window.prompt('请输入补货数量（正整数）','10');if(count===null)return;count=parseInt(count,10);if(!Number.isInteger(count)||count<=0){alert('补货数量必须大于0');return;}$.ajax({url:'/merchant/goods/restock',type:'POST',data:{goodsId:id,count:count},success:function(data){if(data&&Number(data.code)===0)loadGoods();else fail(data);}});}
+$('#goodsForm').on('submit',function(e){e.preventDefault();$.ajax({url:'/merchant/goods/save',type:'POST',data:payload(),success:function(data){if(data&&Number(data.code)===0){resetGoods();loadGoods();}else fail(data);}});});
+boot();
+</script>
+</body>
+</html>

@@ -15,19 +15,26 @@ import java.util.List;
 
 @Mapper
 public interface AdminGoodsDao {
-    @Select("select g.*, s.stock_count, s.start_date, s.end_date, s.seckill_price "
-            + "from goods g join seckill_goods s on s.goods_id=g.id order by g.id desc")
+    @Select("select g.*, s.stock_count, s.start_date, s.end_date, s.seckill_price, sh.name as shopName "
+            + "from goods g join seckill_goods s on s.goods_id=g.id "
+            + "left join shop sh on sh.id=g.shop_id order by g.id desc")
     List<GoodsVo> list();
 
-    @Select("select g.*, s.stock_count, s.start_date, s.end_date, s.seckill_price "
-            + "from goods g join seckill_goods s on s.goods_id=g.id where g.id=#{goodsId}")
+    @Select("select g.*, s.stock_count, s.start_date, s.end_date, s.seckill_price, sh.name as shopName "
+            + "from goods g join seckill_goods s on s.goods_id=g.id "
+            + "left join shop sh on sh.id=g.shop_id where g.shop_id=#{shopId} order by g.id desc")
+    List<GoodsVo> listByShopId(@Param("shopId") long shopId);
+
+    @Select("select g.*, s.stock_count, s.start_date, s.end_date, s.seckill_price, sh.name as shopName "
+            + "from goods g join seckill_goods s on s.goods_id=g.id "
+            + "left join shop sh on sh.id=g.shop_id where g.id=#{goodsId}")
     GoodsVo get(@Param("goodsId") long goodsId);
 
     @Select("select * from seckill_goods where goods_id=#{goodsId}")
     SeckillGoods getSeckill(@Param("goodsId") long goodsId);
 
-    @Insert("insert into goods (goods_name,goods_title,goods_img,goods_detail,goods_price,goods_stock) "
-            + "values (#{goodsName},#{goodsTitle},#{goodsImg},#{goodsDetail},#{goodsPrice},#{goodsStock})")
+    @Insert("insert into goods (goods_name,goods_title,goods_img,goods_detail,goods_price,goods_stock,shop_id) "
+            + "values (#{goodsName},#{goodsTitle},#{goodsImg},#{goodsDetail},#{goodsPrice},#{goodsStock},#{shopId})")
     @Options(useGeneratedKeys = true, keyProperty = "id")
     int insertGoods(Goods goods);
 

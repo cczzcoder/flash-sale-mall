@@ -15,6 +15,8 @@ public class Goods {
     private Double goodsPrice;
     // 库存
     private Integer goodsStock;
+    /** 所属店铺ID，NULL=平台自营 */
+    private Long shopId;
 
     public Long getId() {
         return id;
@@ -70,6 +72,14 @@ public class Goods {
 
     public void setGoodsStock(Integer goodsStock) {
         this.goodsStock = goodsStock;
+    }
+
+    public Long getShopId() {
+        return shopId;
+    }
+
+    public void setShopId(Long shopId) {
+        this.shopId = shopId;
     }
 
 }

@@ -10,6 +10,7 @@ CREATE DATABASE seckill CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
 -- 2.5、执行创建秒杀用户表 seckill_user.sql
 -- 2.6、执行创建秒杀订单表 seckill_order.sql
 -- 2.7、执行 sql/migration/upgrade_to_current.sql（补齐地址、支付、物流、退款和索引）
+-- 2.8、执行 sql/migration/merchant_mvp.sql（商家体系：shop 表、goods.shop_id、seckill_user.role）
 
 -- 3、执行完毕
 

@@ -9,6 +9,11 @@ import java.util.Date;
 @TableName("seckill_user")
 public class SeckillUser {
 
+    /** 普通用户 */
+    public static final int ROLE_USER     = 0;
+    /** 商家（店铺审核通过后由平台授予） */
+    public static final int ROLE_MERCHANT = 1;
+
     @TableId(type = IdType.INPUT)
     private Long id;
     private String nickname;
@@ -18,6 +23,8 @@ public class SeckillUser {
     private Date registerDate;
     private Date lastLoginDate;
     private Integer loginCount;
+    /** 0-普通用户 1-商家 9-平台管理员 */
+    private Integer role;
 
     public String getPwd() {
         return pwd;
@@ -81,6 +88,14 @@ public class SeckillUser {
 
     public void setLoginCount(Integer loginCount) {
         this.loginCount = loginCount;
+    }
+
+    public Integer getRole() {
+        return role;
+    }
+
+    public void setRole(Integer role) {
+        this.role = role;
     }
 
 }
