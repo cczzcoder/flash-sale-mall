@@ -36,14 +36,16 @@ public class DeliveryAddressService {
 
     @Transactional
     public ResultCode save(long userId, DeliveryAddressVo vo) {
-        DeliveryAddress address = vo.getId() == null ? new DeliveryAddress() : addressDao.selectOwned(vo.getId(), userId);
-        if (vo.getId() != null && address == null) {
-            return ResultCode.ADDRESS_NOT_EXIST;
-        }
-        if (address == null) {
+        DeliveryAddress address;
+        if (vo.getId() == null) {
             address = new DeliveryAddress();
             address.setUserId(userId);
             address.setCreateDate(new Date());
+        } else {
+            address = addressDao.selectOwned(vo.getId(), userId);
+            if (address == null) {
+                return ResultCode.ADDRESS_NOT_EXIST;
+            }
         }
         address.setReceiverName(vo.getReceiverName().trim());
         address.setReceiverMobile(vo.getReceiverMobile().trim());

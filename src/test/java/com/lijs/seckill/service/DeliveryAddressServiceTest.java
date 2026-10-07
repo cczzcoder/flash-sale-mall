@@ -7,10 +7,12 @@ import com.lijs.seckill.vo.DeliveryAddressVo;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -38,6 +40,19 @@ class DeliveryAddressServiceTest {
         verify(addressDao).insert(any(DeliveryAddress.class));
         verify(addressDao).clearDefault(7L);
         verify(addressDao).updateById(any(DeliveryAddress.class));
+    }
+
+    @Test
+    void savesNewAddressBoundToOwner() {
+        DeliveryAddressVo vo = address("广州市", false);
+
+        assertEquals(ResultCode.SUCCESS.getCode(), service.save(7L, vo).getCode());
+
+        ArgumentCaptor<DeliveryAddress> captor = ArgumentCaptor.forClass(DeliveryAddress.class);
+        verify(addressDao).insert(captor.capture());
+        DeliveryAddress inserted = captor.getValue();
+        assertEquals(7L, inserted.getUserId().longValue());
+        assertNotNull(inserted.getCreateDate());
     }
 
     @Test
