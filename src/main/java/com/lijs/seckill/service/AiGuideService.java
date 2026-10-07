@@ -292,6 +292,7 @@ public class AiGuideService {
 
         // --- 当前商品上下文 ---
         sb.append("【当前秒杀商品】\n");
+        sb.append("当前时间：").append(new SimpleDateFormat("yyyy-MM-dd HH:mm").format(new Date())).append("\n");
         try {
             List<GoodsVo> list = goodsService.getGoodsVoList();
             SimpleDateFormat sdf = new SimpleDateFormat("MM-dd HH:mm");
@@ -302,8 +303,10 @@ public class AiGuideService {
                     sb.append(String.format("，秒杀时间 %s ~ %s",
                             sdf.format(g.getStartDate()), sdf.format(g.getEndDate())));
                 }
+                sb.append("，状态：").append(activityStatusText(g.getActivityStatus()));
                 sb.append("\n");
             }
+            sb.append("推荐时只考虑状态为【进行中】的商品；未开始或已结束的商品不要推荐，用户主动问起时如实说明状态。\n");
         } catch (Exception e) {
             logger.warn("获取商品列表失败", e);
             sb.append("（商品信息暂时不可用）\n");
@@ -331,6 +334,13 @@ public class AiGuideService {
         // --- 多语言指令 ---
         sb.append(buildLangInstruction(lang));
         return sb.toString();
+    }
+
+    /** GoodsVo.getActivityStatus() 的展示文案：0=未开始，1=进行中，2=已结束。 */
+    private static String activityStatusText(int status) {
+        if (status == 0) return "未开始";
+        if (status == 1) return "进行中";
+        return "已结束";
     }
 
     private static String buildLangInstruction(String lang) {

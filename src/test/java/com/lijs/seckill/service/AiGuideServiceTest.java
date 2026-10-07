@@ -123,6 +123,9 @@ class AiGuideServiceTest {
         assertTrue(zhPrompt.contains("iPhone 17"));
         assertTrue(zhPrompt.contains("AirPods"));
         assertTrue(zhPrompt.contains("请始终用中文回复。"));
+        assertTrue(zhPrompt.contains("当前时间："));
+        assertTrue(zhPrompt.contains("状态：已结束"));   // start == end 属非法窗口，按已结束处理
+        assertTrue(zhPrompt.contains("只考虑状态为【进行中】的商品"));
 
         String enPrompt = ReflectionTestUtils.invokeMethod(service, "buildSystemPrompt", 10001L, "en");
         assertTrue(enPrompt.contains("English only"));
