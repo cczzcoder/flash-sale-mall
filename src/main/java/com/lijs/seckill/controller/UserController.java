@@ -6,6 +6,7 @@ import com.lijs.seckill.service.GoodsService;
 import com.lijs.seckill.service.SeckillUserService;
 import com.lijs.seckill.result.ResultCode;
 import com.lijs.seckill.vo.ChangePasswordVo;
+import com.lijs.seckill.vo.ProfileVo;
 import com.lijs.seckill.vo.RegisterVo;
 import com.lijs.seckill.vo.UserInfoVo;
 import com.lijs.seckill.vo.GoodsVo;
@@ -64,6 +65,25 @@ public class UserController {
     public Result<Boolean> logout(HttpServletRequest request, HttpServletResponse response) {
         seckillUserService.logout(resolveToken(request), response);
         return Result.success(true);
+    }
+
+    /**
+     * 更新个人资料（POST /user/profile）。
+     * 只需昵称与头像；手机号即登录账号，不可修改。
+     *
+     * @param user      由 UserArgumentResolver 自动注入的当前用户
+     * @param profileVo 昵称（非空）+ 头像 URL（可空）
+     * @param request   用于提取 token，同步刷新 token → user 缓存
+     */
+    @RequestMapping("/profile")
+    @ResponseBody
+    public Result<Boolean> updateProfile(SeckillUser user, @Valid ProfileVo profileVo,
+                                         HttpServletRequest request) {
+        if (user == null) {
+            return Result.error(ResultCode.SESSION_ERROR);
+        }
+        ResultCode result = seckillUserService.updateProfile(user.getId(), profileVo, resolveToken(request));
+        return result.getCode() == 0 ? Result.success(true) : Result.error(result);
     }
 
     private String resolveToken(HttpServletRequest request) {

@@ -4,6 +4,8 @@ import com.lijs.seckill.dao.SeckillUserDao;
 import com.lijs.seckill.dao.ShopDao;
 import com.lijs.seckill.domain.SeckillUser;
 import com.lijs.seckill.domain.Shop;
+import com.lijs.seckill.redis.RedisService;
+import com.lijs.seckill.redis.SeckillUserKey;
 import com.lijs.seckill.result.ResultCode;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -22,10 +24,12 @@ public class ShopService {
 
     private final ShopDao shopDao;
     private final SeckillUserDao seckillUserDao;
+    private final RedisService redisService;
 
-    public ShopService(ShopDao shopDao, SeckillUserDao seckillUserDao) {
+    public ShopService(ShopDao shopDao, SeckillUserDao seckillUserDao, RedisService redisService) {
         this.shopDao = shopDao;
         this.seckillUserDao = seckillUserDao;
+        this.redisService = redisService;
     }
 
     /** 提交入驻申请：一个用户只能有一个店铺（uk_owner_user 兜底并发重复提交）。 */
@@ -79,6 +83,8 @@ public class ShopService {
         }
         if (status == Shop.STATUS_ACTIVE) {
             seckillUserDao.updateRole(shop.getOwnerUserId(), SeckillUser.ROLE_MERCHANT);
+            // 角色变更后失效用户缓存，使商家身份即时生效（getById 缓存永不过期）
+            redisService.delete(SeckillUserKey.getById, String.valueOf(shop.getOwnerUserId()));
         }
         return ResultCode.SUCCESS;
     }

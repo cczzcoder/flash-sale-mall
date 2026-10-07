@@ -7,6 +7,7 @@ import com.lijs.seckill.redis.SeckillUserKey;
 import com.lijs.seckill.result.ResultCode;
 import com.lijs.seckill.util.MD5Util;
 import com.lijs.seckill.vo.LoginVo;
+import com.lijs.seckill.vo.ProfileVo;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -20,9 +21,12 @@ import javax.servlet.http.HttpServletResponse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -87,6 +91,106 @@ class SeckillUserServiceTest {
 
         assertNotNull(token);
         assertFalse(token.isEmpty());
+    }
+
+    @Test
+    void updateProfileReturnsServerErrorForNullVo() {
+        assertEquals(ResultCode.SERVER_ERROR.getCode(),
+                service.updateProfile(MOBILE, null, "tok").getCode());
+    }
+
+    @Test
+    void updateProfileReturnsSessionErrorWhenUserMissing() {
+        assertEquals(ResultCode.SESSION_ERROR.getCode(),
+                service.updateProfile(MOBILE, profileVo("newNick", null), "tok").getCode());
+        verify(seckillUserDao, never()).updateProfile(anyLong(), anyString(), any());
+    }
+
+    @Test
+    void updateProfileUpdatesRowAndRefreshesBothCaches() {
+        SeckillUser existing = new SeckillUser();
+        existing.setId(MOBILE);
+        existing.setNickname("old");
+        SeckillUser fresh = new SeckillUser();
+        fresh.setId(MOBILE);
+        fresh.setNickname("newNick");
+        when(seckillUserDao.getById(MOBILE)).thenReturn(existing, fresh);
+        when(seckillUserDao.updateProfile(MOBILE, "newNick", null)).thenReturn(1);
+
+        assertEquals(ResultCode.SUCCESS.getCode(),
+                service.updateProfile(MOBILE, profileVo(" newNick ", "  "), "tok").getCode());
+
+        verify(seckillUserDao).updateProfile(MOBILE, "newNick", null);
+        verify(redisService).delete(SeckillUserKey.getById, String.valueOf(MOBILE));
+        verify(redisService).set(SeckillUserKey.getById, String.valueOf(MOBILE), fresh);
+        verify(redisService).set(SeckillUserKey.token, "tok", fresh);
+    }
+
+    @Test
+    void updateProfileSkipsTokenRefreshWhenTokenMissing() {
+        when(seckillUserDao.getById(MOBILE)).thenReturn(new SeckillUser());
+        when(seckillUserDao.updateProfile(MOBILE, "newNick", "/img/a.png")).thenReturn(1);
+
+        assertEquals(ResultCode.SUCCESS.getCode(),
+                service.updateProfile(MOBILE, profileVo("newNick", "/img/a.png"), null).getCode());
+
+        verify(redisService, never()).set(eq(SeckillUserKey.token), anyString(), any());
+    }
+
+    @Test
+    void updateProfileReturnsServerErrorWhenRowNotUpdated() {
+        SeckillUser existing = new SeckillUser();
+        existing.setId(MOBILE);
+        when(seckillUserDao.getById(MOBILE)).thenReturn(existing);
+        when(seckillUserDao.updateProfile(MOBILE, "newNick", null)).thenReturn(0);
+
+        assertEquals(ResultCode.SERVER_ERROR.getCode(),
+                service.updateProfile(MOBILE, profileVo("newNick", null), "tok").getCode());
+        verify(redisService, never()).delete(eq(SeckillUserKey.getById), anyString());
+    }
+
+    @Test
+    void getByTokenReturnsNullForEmptyToken() {
+        assertNull(service.getByToken(null, response));
+        assertNull(service.getByToken("", response));
+    }
+
+    @Test
+    void getByTokenRefreshesStaleSnapshotFromIdCache() {
+        SeckillUser stale = new SeckillUser();
+        stale.setId(MOBILE);
+        stale.setNickname("oldNick");
+        SeckillUser fresh = new SeckillUser();
+        fresh.setId(MOBILE);
+        fresh.setNickname("newNick");
+        when(redisService.get(SeckillUserKey.token, "tok", SeckillUser.class)).thenReturn(stale);
+        when(seckillUserDao.getById(MOBILE)).thenReturn(fresh);
+
+        SeckillUser resolved = service.getByToken("tok", response);
+
+        assertEquals("newNick", resolved.getNickname());
+        verify(redisService).set(SeckillUserKey.token, "tok", fresh);
+        verify(response).addCookie(any(Cookie.class));
+    }
+
+    @Test
+    void getByTokenKeepsSnapshotWhenUserNoLongerExists() {
+        SeckillUser stale = new SeckillUser();
+        stale.setId(MOBILE);
+        stale.setNickname("oldNick");
+        when(redisService.get(SeckillUserKey.token, "tok", SeckillUser.class)).thenReturn(stale);
+
+        SeckillUser resolved = service.getByToken("tok", response);
+
+        assertEquals("oldNick", resolved.getNickname());
+        verify(redisService).set(SeckillUserKey.token, "tok", stale);
+    }
+
+    private ProfileVo profileVo(String nickname, String head) {
+        ProfileVo vo = new ProfileVo();
+        vo.setNickname(nickname);
+        vo.setHead(head);
+        return vo;
     }
 
     private LoginVo loginVo(String formPass) {

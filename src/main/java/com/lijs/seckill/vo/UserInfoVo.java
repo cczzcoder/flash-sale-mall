@@ -10,6 +10,7 @@ public class UserInfoVo {
     private final Long id;
     private final String nickname;
     private final String head;
+    private final Integer role;
     private final Date registerDate;
     private final Date lastLoginDate;
     private final Integer loginCount;
@@ -18,6 +19,7 @@ public class UserInfoVo {
         this.id = user.getId();
         this.nickname = user.getNickname();
         this.head = user.getHead();
+        this.role = user.getRole();
         this.registerDate = user.getRegisterDate();
         this.lastLoginDate = user.getLastLoginDate();
         this.loginCount = user.getLoginCount();
@@ -30,6 +32,7 @@ public class UserInfoVo {
     public Long getId() { return id; }
     public String getNickname() { return nickname; }
     public String getHead() { return head; }
+    public Integer getRole() { return role; }
     public Date getRegisterDate() { return registerDate; }
     public Date getLastLoginDate() { return lastLoginDate; }
     public Integer getLoginCount() { return loginCount; }

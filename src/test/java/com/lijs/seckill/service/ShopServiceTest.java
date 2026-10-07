@@ -4,6 +4,8 @@ import com.lijs.seckill.dao.SeckillUserDao;
 import com.lijs.seckill.dao.ShopDao;
 import com.lijs.seckill.domain.SeckillUser;
 import com.lijs.seckill.domain.Shop;
+import com.lijs.seckill.redis.RedisService;
+import com.lijs.seckill.redis.SeckillUserKey;
 import com.lijs.seckill.result.ResultCode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -26,12 +28,13 @@ import static org.mockito.Mockito.when;
 class ShopServiceTest {
     @Mock private ShopDao shopDao;
     @Mock private SeckillUserDao seckillUserDao;
+    @Mock private RedisService redisService;
 
     private ShopService service;
 
     @BeforeEach
     void setUp() {
-        service = new ShopService(shopDao, seckillUserDao);
+        service = new ShopService(shopDao, seckillUserDao, redisService);
     }
 
     @Test
@@ -105,6 +108,7 @@ class ShopServiceTest {
 
         verify(shopDao).updateStatus(7L, Shop.STATUS_ACTIVE);
         verify(seckillUserDao).updateRole(10001L, SeckillUser.ROLE_MERCHANT);
+        verify(redisService).delete(SeckillUserKey.getById, "10001");
     }
 
     @Test
@@ -119,5 +123,6 @@ class ShopServiceTest {
 
         verify(shopDao).updateStatus(7L, Shop.STATUS_DISABLED);
         verify(seckillUserDao, never()).updateRole(anyLong(), anyInt());
+        verify(redisService, never()).delete(any(SeckillUserKey.class), any());
     }
 }

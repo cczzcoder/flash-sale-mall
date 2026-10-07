@@ -20,4 +20,7 @@ public interface SeckillUserDao extends BaseMapper<SeckillUser> {
 
     @Update("update seckill_user set role=#{role} where id=#{userId}")
     int updateRole(@Param("userId") long userId, @Param("role") int role);
+
+    @Update("update seckill_user set nickname=#{nickname}, head=#{head} where id=#{userId}")
+    int updateProfile(@Param("userId") long userId, @Param("nickname") String nickname, @Param("head") String head);
 }

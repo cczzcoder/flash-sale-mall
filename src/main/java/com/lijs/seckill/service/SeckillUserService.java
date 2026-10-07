@@ -8,6 +8,7 @@ import com.lijs.seckill.result.ResultCode;
 import com.lijs.seckill.util.MD5Util;
 import com.lijs.seckill.util.UUIDUtil;
 import com.lijs.seckill.vo.LoginVo;
+import com.lijs.seckill.vo.ProfileVo;
 import com.lijs.seckill.vo.RegisterVo;
 import com.lijs.seckill.vo.ChangePasswordVo;
 import org.apache.commons.lang3.StringUtils;
@@ -75,6 +76,10 @@ public class SeckillUserService {
      * <p>每次请求都调用此方法，相当于"滑动窗口"续期：只要用户在有效期内有操作，
      * token 就不会过期。
      *
+     * <p>token 缓存保存的是登录时的用户快照；这里再按用户 ID 读一次缓存
+     * （资料/角色变更时会失效重读），保证昵称、头像、角色等变更
+     * 对所有已登录会话在下次请求时即时生效。
+     *
      * @param token    从 Cookie / URL 参数 / Header 中提取的 token
      * @param response HTTP 响应，用于更新 Set-Cookie 头
      * @return 用户对象；token 为空或 Redis 中不存在则返回 null
@@ -86,6 +91,10 @@ public class SeckillUserService {
         SeckillUser user = redisService.get(SeckillUserKey.token, token, SeckillUser.class);
         // 用户存在时重新设置 Cookie，实现有效期滑动续期
         if (user != null) {
+            SeckillUser fresh = getById(user.getId());
+            if (fresh != null) {
+                user = fresh;
+            }
             addCookie(user, token, response);
         }
         return user;
@@ -198,6 +207,41 @@ public class SeckillUserService {
             return ResultCode.SERVER_ERROR;
         }
         redisService.delete(SeckillUserKey.getById, String.valueOf(userId));
+        return ResultCode.SUCCESS;
+    }
+
+    /**
+     * 更新当前用户的昵称与头像。
+     *
+     * <p>数据库更新成功后同步两层缓存：
+     * <ol>
+     *   <li>删除 {@code SeckillUserKey.getById} 缓存并回查，避免旧资料残留在用户维度缓存；</li>
+     *   <li>若请求携带 token，将新资料写回 {@code SeckillUserKey.token} 缓存，
+     *       使此前登录的会话立即读到新昵称/头像。</li>
+     * </ol>
+     *
+     * @param userId    当前用户 ID（手机号）
+     * @param profileVo 昵称（非空）+ 头像 URL（可空，空表示使用默认头像）
+     * @param token     当前请求的 token，可为 null
+     * @return {@link ResultCode#SUCCESS} 表示成功；用户不存在返回 SESSION_ERROR
+     */
+    public ResultCode updateProfile(long userId, ProfileVo profileVo, String token) {
+        if (profileVo == null) {
+            return ResultCode.SERVER_ERROR;
+        }
+        SeckillUser user = getById(userId);
+        if (user == null) {
+            return ResultCode.SESSION_ERROR;
+        }
+        String head = StringUtils.isBlank(profileVo.getHead()) ? null : profileVo.getHead().trim();
+        if (seckillUserDao.updateProfile(userId, profileVo.getNickname().trim(), head) != 1) {
+            return ResultCode.SERVER_ERROR;
+        }
+        redisService.delete(SeckillUserKey.getById, String.valueOf(userId));
+        SeckillUser fresh = getById(userId);
+        if (fresh != null && !StringUtils.isEmpty(token)) {
+            redisService.set(SeckillUserKey.token, token, fresh);
+        }
         return ResultCode.SUCCESS;
     }
 
