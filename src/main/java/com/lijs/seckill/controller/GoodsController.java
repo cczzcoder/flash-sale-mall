@@ -1,5 +1,6 @@
 package com.lijs.seckill.controller;
 
+import com.lijs.seckill.access.AccessLimit;
 import com.lijs.seckill.domain.SeckillUser;
 import com.lijs.seckill.redis.GoodsKey;
 import com.lijs.seckill.redis.RedisService;
@@ -18,7 +19,7 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
-import org.thymeleaf.TemplateEngine;
+import org.thymeleaf.ITemplateEngine;
 import org.thymeleaf.context.WebContext;
 
 import javax.servlet.http.HttpServletRequest;
@@ -50,7 +51,7 @@ public class GoodsController {
     private RedisService redisService;
     /** Spring Boot 自动配置的 Thymeleaf 模板引擎，用于手动渲染模板并缓存结果 */
     @Autowired
-    private TemplateEngine templateEngine;
+    private ITemplateEngine templateEngine;
     @Autowired
     private ApplicationContext applicationContext;
 
@@ -74,6 +75,8 @@ public class GoodsController {
      * <ol>
      *   <li>优先从 Redis 取已渲染好的 HTML 字符串，命中则直接返回。</li>
      *   <li>未命中时查 DB、渲染模板，将结果存入 Redis（TTL 由 {@link GoodsKey#getGoodsList} 决定，默认 60s）。</li>
+     *   <li>重建时用 SETNX 互斥锁防<b>缓存击穿</b>：只放一个请求去查库渲染，
+     *       其余请求 sleep 100ms 后重试读缓存，避免 TTL 到期瞬间所有请求同时砸向 DB。</li>
      * </ol>
      * 实测 QPS ≈ 1202，较无缓存版提升约 53%。
      *
@@ -89,18 +92,40 @@ public class GoodsController {
         if (!StringUtils.isEmpty(html)) {
             return html;
         }
-        // 2. 缓存未命中：查询数据，手动渲染模板
-        model.addAttribute("user", user);
-        List<GoodsVo> goodsList = goodsService.getGoodsVoList();
-        model.addAttribute("goodsList", goodsList);
-        WebContext context = new WebContext(request, response,
-                request.getServletContext(), request.getLocale(), model.asMap());
-        html = templateEngine.process("goods_list", context);
-        // 3. 将渲染好的 HTML 存入缓存，下次请求直接命中
-        if (!StringUtils.isEmpty(html)) {
-            redisService.set(GoodsKey.getGoodsList, "", html);
+        // 2. 缓存击穿防护：SETNX 抢重建锁（TTL 5s），只有抢到的请求负责查库渲染
+        boolean locked = redisService.setIfAbsent(GoodsKey.getGoodsListRebuildLock, "", "1");
+        if (!locked) {
+            // 没抢到锁：稍等一下让重建方写完缓存，然后重试读缓存
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            html = redisService.get(GoodsKey.getGoodsList, "", String.class);
+            if (!StringUtils.isEmpty(html)) {
+                return html;
+            }
+            // 仍未命中说明重建方失败或尚未写完，本请求降级为自行渲染，保证有响应
         }
-        return html;
+        try {
+            // 3. 查询数据并手动渲染模板
+            model.addAttribute("user", user);
+            List<GoodsVo> goodsList = goodsService.getGoodsVoList();
+            model.addAttribute("goodsList", goodsList);
+            WebContext context = new WebContext(request, response,
+                    request.getServletContext(), request.getLocale(), model.asMap());
+            html = templateEngine.process("goods_list", context);
+            // 4. 将渲染好的 HTML 存入缓存，下次请求直接命中
+            if (!StringUtils.isEmpty(html)) {
+                redisService.set(GoodsKey.getGoodsList, "", html);
+            }
+            return html;
+        } finally {
+            // 5. 只释放自己抢到的锁，未抢到锁的降级请求不能误删他人的锁
+            if (locked) {
+                redisService.delete(GoodsKey.getGoodsListRebuildLock, "");
+            }
+        }
     }
 
     /**
@@ -159,9 +184,18 @@ public class GoodsController {
      *
      * <p>优势：静态 HTML 可以放 CDN 缓存，服务端只需承载 JSON 接口的压力。
      *
+     * <p>防<b>缓存穿透</b>：
+     * <ul>
+     *   <li>接口公开且无缓存，容易被脚本用不存在的 goodsId 刷库，故入口加
+     *       {@link AccessLimit}（每 IP 每秒 10 次）限制刷量；</li>
+     *   <li>DB 查不到的 ID 在 Redis 写入 60s 空值缓存（{@link GoodsKey#getGoodsNull}），
+     *       窗口内的重复请求直接短路返回 GOODS_NOT_EXIST，不再落到 DB。</li>
+     * </ul>
+     *
      * @param goodsId 商品 ID（路径变量）
      * @return 包含 {@link GoodsDetailVo}（商品信息 + 秒杀状态 + 用户信息）的统一 JSON 响应
      */
+    @AccessLimit(seconds = 1, maxCount = 10, needLogin = false)
     @RequestMapping(value = "/detailStatic/{goodsId}")
     @ResponseBody
     public Result<GoodsDetailVo> detailStaticPage(Model model, SeckillUser user,
@@ -172,8 +206,15 @@ public class GoodsController {
         if (goodsId <= 0) {
             return Result.error(ResultCode.GOODS_NOT_EXIST);
         }
+        // 1. 空值缓存命中：该 ID 在 60s 内已被确认不存在，直接短路，不再查库
+        if (redisService.existsKey(GoodsKey.getGoodsNull, String.valueOf(goodsId))) {
+            return Result.error(ResultCode.GOODS_NOT_EXIST);
+        }
+        // 2. 缓存未命中，查库
         GoodsVo goodsVo = goodsService.getGoodsVoByGoodsId(goodsId);
         if (goodsVo == null) {
+            // 3. 回填空值缓存，防止同一不存在 ID 被反复刷库（缓存穿透）
+            redisService.set(GoodsKey.getGoodsNull, String.valueOf(goodsId), "1");
             return Result.error(ResultCode.GOODS_NOT_EXIST);
         }
         if (goodsVo.isInvalidWindow()) {

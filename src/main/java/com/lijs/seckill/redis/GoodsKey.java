@@ -12,6 +12,10 @@ package com.lijs.seckill.redis;
  *   <li>{@link #getSeckillGoodsStock} — 秒杀商品库存计数，永不过期。
  *       key = {@code GoodsKey:gs<goodsId>}，value = 剩余库存数量（Integer）。
  *       系统启动时从 DB 预热写入，秒杀时通过 Lua 脚本原子扣减。</li>
+ *   <li>{@link #getGoodsNull}       — 不存在商品的空值缓存（防缓存穿透），TTL = 60s。
+ *       key = {@code GoodsKey:gn<goodsId>}。</li>
+ *   <li>{@link #getGoodsListRebuildLock} — 列表页缓存重建互斥锁（防缓存击穿），TTL = 5s。
+ *       key = {@code GoodsKey:gll}。</li>
  * </ul>
  */
 public class GoodsKey extends BasePrefix {
@@ -42,4 +46,18 @@ public class GoodsKey extends BasePrefix {
 
     /** 秒杀预扣库存 reservation 的最终状态，保存一周用于跨进程重试幂等。 */
     public static GoodsKey getSeckillReservation = new GoodsKey(604800, "gsr");
+
+    /**
+     * 不存在商品的空值缓存（防缓存穿透），TTL = 60s。
+     * 非法/已删除的 goodsId 首次查库确认不存在后写入，后续请求直接短路，不打 DB。
+     * 用于 {@link com.lijs.seckill.controller.GoodsController#detailStaticPage}。
+     */
+    public static GoodsKey getGoodsNull = new GoodsKey(60, "gn");
+
+    /**
+     * 列表页缓存重建互斥锁（防缓存击穿），TTL = 5s。
+     * 缓存过期瞬间只有抢到锁的请求去查库+渲染，其余请求稍候重读缓存；
+     * TTL 仅作持锁进程崩溃后的兜底解锁，正常路径在重建完成后主动删除。
+     */
+    public static GoodsKey getGoodsListRebuildLock = new GoodsKey(5, "gll");
 }
