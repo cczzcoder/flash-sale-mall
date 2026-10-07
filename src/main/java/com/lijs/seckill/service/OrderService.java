@@ -51,20 +51,10 @@ public class OrderService {
 
     @Transactional
     public OrderInfo createCacheOrder(SeckillUser user, GoodsVo goodsVo, Long deliveryAddrId) {
-        // 1.生成 order_info 订单，MP insert 后 id 自动回填
-        OrderInfo orderInfo = buildOrder(goodsVo.getId(), goodsVo.getGoodsName(),
-                goodsVo.getSeckillPrice(), user.getId(), deliveryAddrId);
-        orderDao.insert(orderInfo);
-        long orderId = orderInfo.getId();
-        logger.info("orderId:{}", orderId);
-        // 2.生成秒杀订单 seckill_order
-        SeckillOrder seckillOrder = new SeckillOrder();
-        seckillOrder.setGoodsId(goodsVo.getId());
-        seckillOrder.setOrderId(orderId);
-        seckillOrder.setUserId(user.getId());
-        orderDao.insertSeckillOrder(seckillOrder);
-        // 3.事务提交后再设置缓存（key:用户ID_商品ID value:秒杀订单）
-        cacheSeckillOrderAfterCommit(seckillOrder);
+        OrderInfo orderInfo = insertOrderInfo(user, goodsVo, deliveryAddrId);
+        logger.info("orderId:{}", orderInfo.getId());
+        // 生成秒杀订单 seckill_order，并在事务提交后设置缓存（key:用户ID_商品ID value:秒杀订单）
+        cacheSeckillOrderAfterCommit(insertSeckillOrder(user, goodsVo, orderInfo.getId()));
         return orderInfo;
     }
 
@@ -110,18 +100,28 @@ public class OrderService {
 
     @Transactional
     public OrderInfo createOrderWithoutCache(SeckillUser user, GoodsVo goodsVo, Long deliveryAddrId) {
-        // 1.生成订单order_info（含商品名，保证 order_info.goods_name 不为 null）
+        // 生成 order_info（含商品名，保证 order_info.goods_name 不为 null）与秒杀订单 seckill_order
+        OrderInfo orderInfo = insertOrderInfo(user, goodsVo, deliveryAddrId);
+        insertSeckillOrder(user, goodsVo, orderInfo.getId());
+        return orderInfo;
+    }
+
+    /** 共享核心：生成 order_info 并插入，MP 回填 id 后返回。 */
+    private OrderInfo insertOrderInfo(SeckillUser user, GoodsVo goodsVo, Long deliveryAddrId) {
         OrderInfo orderInfo = buildOrder(goodsVo.getId(), goodsVo.getGoodsName(),
                 goodsVo.getSeckillPrice(), user.getId(), deliveryAddrId);
         orderDao.insert(orderInfo);
-        // 2.生成秒杀订单seckill_order
+        return orderInfo;
+    }
+
+    /** 共享核心：生成 seckill_order 并插入，返回实体供缓存回写使用。 */
+    private SeckillOrder insertSeckillOrder(SeckillUser user, GoodsVo goodsVo, long orderId) {
         SeckillOrder seckillOrder = new SeckillOrder();
         seckillOrder.setGoodsId(goodsVo.getId());
-        // 3.将订单id传给秒杀订单里面的订单 orderId
-        seckillOrder.setOrderId(orderInfo.getId());
+        seckillOrder.setOrderId(orderId);
         seckillOrder.setUserId(user.getId());
         orderDao.insertSeckillOrder(seckillOrder);
-        return orderInfo;
+        return seckillOrder;
     }
 
     private OrderInfo buildOrder(Long goodsId, String goodsName, Double seckillPrice,

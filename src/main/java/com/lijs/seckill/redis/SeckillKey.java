@@ -34,8 +34,8 @@ public class SeckillKey extends BasePrefix {
 
     /**
      * 图片验证码答案，TTL = 300s。
-     * 生成：{@link com.lijs.seckill.service.SeckillService#createSeckillVerifyCode}
-     * 校验：{@link com.lijs.seckill.service.SeckillService#checkVCode}（校验后立即删除）
+     * 生成：{@link com.lijs.seckill.service.VerifyCodeService#createSeckillVerifyCode}
+     * 校验：{@link com.lijs.seckill.service.VerifyCodeService#checkVCode}（校验后立即删除）
      */
     public static SeckillKey getSeckillVerifyCode = new SeckillKey(300, "vc");
 

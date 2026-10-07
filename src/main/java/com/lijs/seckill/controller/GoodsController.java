@@ -127,29 +127,12 @@ public class GoodsController {
         if (goods == null) {
             return renderErrorPage(model, user, request, response, ResultCode.GOODS_NOT_EXIST);
         }
-        if (goods.getStartDate() == null || goods.getEndDate() == null
-                || !goods.getStartDate().before(goods.getEndDate())) {
+        if (goods.isInvalidWindow()) {
             return renderErrorPage(model, user, request, response, ResultCode.GOODS_TIME_INVALID);
         }
         model.addAttribute("goods", goods);
-
-        long start = goods.getStartDate().getTime();
-        long end   = goods.getEndDate().getTime();
-        long now   = System.currentTimeMillis();
-        int status;           // 0=未开始 1=进行中 2=已结束
-        int remainingSeconds; // 距开始的倒计时秒数；进行中=0，已结束=-1
-        if (now < start) {
-            status = 0;
-            remainingSeconds = (int) ((start - now) / 1000);
-        } else if (now > end) {
-            status = 2;
-            remainingSeconds = -1;
-        } else {
-            status = 1;
-            remainingSeconds = 0;
-        }
-        model.addAttribute("status", status);
-        model.addAttribute("remainingSeconds", remainingSeconds);
+        // 状态由模板读取 goods.activityStatus，此处只需倒计时
+        model.addAttribute("remainingSeconds", goods.getRemainingSeconds());
 
         // Render per request because the template contains user-specific state.
         WebContext context = new WebContext(request, response,
@@ -186,7 +169,6 @@ public class GoodsController {
                                                   @PathVariable("goodsId") long goodsId) {
         logger.info("页面静态化/detail/{goodsId}");
 
-        model.addAttribute("user", user);
         if (goodsId <= 0) {
             return Result.error(ResultCode.GOODS_NOT_EXIST);
         }
@@ -194,35 +176,14 @@ public class GoodsController {
         if (goodsVo == null) {
             return Result.error(ResultCode.GOODS_NOT_EXIST);
         }
-        if (goodsVo.getStartDate() == null || goodsVo.getEndDate() == null
-                || !goodsVo.getStartDate().before(goodsVo.getEndDate())) {
+        if (goodsVo.isInvalidWindow()) {
             return Result.error(ResultCode.GOODS_TIME_INVALID);
         }
-        model.addAttribute("goods", goodsVo);
-
-        long start = goodsVo.getStartDate().getTime();
-        long end   = goodsVo.getEndDate().getTime();
-        long now   = System.currentTimeMillis();
-        int status;
-        int remainingSeconds;
-        if (now < start) {
-            status = 0;
-            remainingSeconds = (int) ((start - now) / 1000); // 毫秒转秒
-        } else if (now > end) {
-            status = 2;
-            remainingSeconds = -1;
-        } else {
-            status = 1;
-            remainingSeconds = 0;
-        }
-        model.addAttribute("status", status);
-        model.addAttribute("remainingSeconds", remainingSeconds);
-
         // 组装 VO，将所有需要的数据一次性返回给前端
         GoodsDetailVo gdVo = new GoodsDetailVo();
         gdVo.setGoodsVo(goodsVo);
-        gdVo.setStatus(status);
-        gdVo.setremainingSeconds(remainingSeconds);
+        gdVo.setStatus(goodsVo.getActivityStatus());
+        gdVo.setRemainingSeconds(goodsVo.getRemainingSeconds());
         gdVo.setUser(user);
         return Result.success(gdVo);
     }

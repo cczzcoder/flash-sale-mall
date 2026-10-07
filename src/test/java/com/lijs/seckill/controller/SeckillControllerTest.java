@@ -9,6 +9,7 @@ import com.lijs.seckill.service.DeliveryAddressService;
 import com.lijs.seckill.service.GoodsService;
 import com.lijs.seckill.service.OrderService;
 import com.lijs.seckill.service.SeckillService;
+import com.lijs.seckill.service.VerifyCodeService;
 import com.lijs.seckill.vo.GoodsVo;
 import com.lijs.seckill.vo.SeckillWindowVo;
 import org.junit.jupiter.api.BeforeEach;
@@ -19,16 +20,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.ui.ExtendedModelMap;
 
-import javax.servlet.http.HttpServletRequest;
 import java.util.Date;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 
 @ExtendWith(MockitoExtension.class)
 class SeckillControllerTest {
@@ -39,6 +37,8 @@ class SeckillControllerTest {
     private RedisService redisService;
     @Mock
     private SeckillService seckillService;
+    @Mock
+    private VerifyCodeService verifyCodeService;
     @Mock
     private OrderService orderService;
     @Mock
@@ -53,6 +53,7 @@ class SeckillControllerTest {
         ReflectionTestUtils.setField(controller, "goodsService", goodsService);
         ReflectionTestUtils.setField(controller, "redisService", redisService);
         ReflectionTestUtils.setField(controller, "seckillService", seckillService);
+        ReflectionTestUtils.setField(controller, "verifyCodeService", verifyCodeService);
         ReflectionTestUtils.setField(controller, "orderService", orderService);
         ReflectionTestUtils.setField(controller, "deliveryAddressService", deliveryAddressService);
         user = new SeckillUser();
@@ -65,8 +66,7 @@ class SeckillControllerTest {
                 new Date(System.currentTimeMillis() + 120_000));
         when(goodsService.getGoodsVoByGoodsId(1L)).thenReturn(goods);
 
-        Result<String> result = controller.getSeckillPath(mock(HttpServletRequest.class),
-                new ExtendedModelMap(), user, 1L, 1);
+        Result<String> result = controller.getSeckillPath(new ExtendedModelMap(), user, 1L, 1);
 
         assertEquals(ResultCode.SECKILL_NOT_STARTED.getCode(), result.getCode());
     }
@@ -77,8 +77,7 @@ class SeckillControllerTest {
                 new Date(System.currentTimeMillis() - 60_000));
         when(goodsService.getGoodsVoByGoodsId(1L)).thenReturn(goods);
 
-        Result<String> result = controller.getSeckillPath(mock(HttpServletRequest.class),
-                new ExtendedModelMap(), user, 1L, 1);
+        Result<String> result = controller.getSeckillPath(new ExtendedModelMap(), user, 1L, 1);
 
         assertEquals(ResultCode.SECKILL_ENDED.getCode(), result.getCode());
     }
@@ -113,13 +112,10 @@ class SeckillControllerTest {
         when(redisService.get(eq(SeckillKey.getSeckillWindow), eq("1"), eq(SeckillWindowVo.class)))
                 .thenReturn(new SeckillWindowVo(new Date(System.currentTimeMillis() - 60_000),
                         new Date(System.currentTimeMillis() + 60_000)));
-        when(redisService.get(eq(com.lijs.seckill.redis.AccessKey.access), anyString(), eq(Integer.class)))
-                .thenReturn(null);
-        when(seckillService.checkVCode(user, 1L, 123)).thenReturn(true);
+        when(verifyCodeService.checkVCode(user, 1L, 123)).thenReturn(true);
         when(seckillService.createSeckillPath(user, 1L)).thenReturn("path");
 
-        Result<String> result = controller.getSeckillPath(mock(HttpServletRequest.class),
-                new ExtendedModelMap(), user, 1L, 123);
+        Result<String> result = controller.getSeckillPath(new ExtendedModelMap(), user, 1L, 123);
 
         assertEquals(ResultCode.SUCCESS.getCode(), result.getCode());
         verify(goodsService, org.mockito.Mockito.never()).getGoodsVoByGoodsId(1L);
@@ -132,13 +128,10 @@ class SeckillControllerTest {
         when(redisService.get(eq(SeckillKey.getSeckillWindow), eq("1"), eq(SeckillWindowVo.class)))
                 .thenReturn(null);
         when(goodsService.getGoodsVoByGoodsId(1L)).thenReturn(goods);
-        when(redisService.get(eq(com.lijs.seckill.redis.AccessKey.access), anyString(), eq(Integer.class)))
-                .thenReturn(null);
-        when(seckillService.checkVCode(user, 1L, 123)).thenReturn(true);
+        when(verifyCodeService.checkVCode(user, 1L, 123)).thenReturn(true);
         when(seckillService.createSeckillPath(user, 1L)).thenReturn("path");
 
-        Result<String> result = controller.getSeckillPath(mock(HttpServletRequest.class),
-                new ExtendedModelMap(), user, 1L, 123);
+        Result<String> result = controller.getSeckillPath(new ExtendedModelMap(), user, 1L, 123);
 
         assertEquals(ResultCode.SUCCESS.getCode(), result.getCode());
         verify(redisService).setIfAbsent(eq(SeckillKey.getSeckillWindow), eq("1"), any(SeckillWindowVo.class));

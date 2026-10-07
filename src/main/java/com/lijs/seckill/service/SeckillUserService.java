@@ -99,28 +99,8 @@ public class SeckillUserService {
      * @return 登录成功返回 token；失败返回错误信息字符串
      */
     public String loginTest(HttpServletResponse response, LoginVo loginVo) {
-        if (loginVo == null) {
-            return ResultCode.SERVER_ERROR.getMsg();
-        }
-        String mobile   = loginVo.getMobile();
-        String password = loginVo.getPassword();
-
-        // 按手机号查用户（手机号即用户 ID）
-        SeckillUser user = getById(Long.parseLong(mobile));
-        if (user == null) {
-            return ResultCode.MOBILE_NOT_EXIST.getMsg();
-        }
-        // 用数据库中的随机 salt 对 formPass 做第二次 MD5，与 dbPass 比对
-        String dbPass  = user.getPwd();
-        String dbSalt  = user.getSalt();
-        String tmpPass = MD5Util.formPassToDBPass(password, dbSalt);
-        if (!tmpPass.equals(dbPass)) {
-            return ResultCode.PASSWORD_ERROR.getMsg();
-        }
-        // 生成 token 并写入 Cookie
-        String token = UUIDUtil.uuid();
-        addCookie(user, token, response);
-        return token;
+        LoginResult result = doLogin(response, loginVo);
+        return result.code.getCode() == 0 ? result.token : result.code.getMsg();
     }
 
     /**
@@ -131,26 +111,45 @@ public class SeckillUserService {
      * @return {@link ResultCode#SUCCESS} 表示成功；其他枚举值表示具体错误
      */
     public ResultCode login(HttpServletResponse response, LoginVo loginVo) {
-        if (loginVo == null) {
-            return ResultCode.SERVER_ERROR;
-        }
-        String mobile   = loginVo.getMobile();
-        String formPass = loginVo.getPassword();
+        return doLogin(response, loginVo).code;
+    }
 
-        SeckillUser user = getById(Long.parseLong(mobile));
+    /** 登录校验公共流程：查用户 → 二次 MD5 比对 → 生成 token 写 Cookie。 */
+    private LoginResult doLogin(HttpServletResponse response, LoginVo loginVo) {
+        if (loginVo == null) {
+            return LoginResult.fail(ResultCode.SERVER_ERROR);
+        }
+        // 按手机号查用户（手机号即用户 ID）
+        SeckillUser user = getById(Long.parseLong(loginVo.getMobile()));
         if (user == null) {
-            return ResultCode.MOBILE_NOT_EXIST;
+            return LoginResult.fail(ResultCode.MOBILE_NOT_EXIST);
         }
         // 二次 MD5 验证：formPass + dbSalt → tmpPass，与库中 dbPass 对比
         String dbPass  = user.getPwd();
         String dbSalt  = user.getSalt();
-        String tmpPass = MD5Util.formPassToDBPass(formPass, dbSalt);
+        String tmpPass = MD5Util.formPassToDBPass(loginVo.getPassword(), dbSalt);
         if (!tmpPass.equals(dbPass)) {
-            return ResultCode.PASSWORD_ERROR;
+            return LoginResult.fail(ResultCode.PASSWORD_ERROR);
         }
+        // 生成 token 并写入 Cookie
         String token = UUIDUtil.uuid();
         addCookie(user, token, response);
-        return ResultCode.SUCCESS;
+        return new LoginResult(ResultCode.SUCCESS, token);
+    }
+
+    /** 登录校验结果：成功时 token 非空，失败时 code 为具体错误码。 */
+    private static final class LoginResult {
+        private final ResultCode code;
+        private final String token;
+
+        private LoginResult(ResultCode code, String token) {
+            this.code = code;
+            this.token = token;
+        }
+
+        static LoginResult fail(ResultCode code) {
+            return new LoginResult(code, null);
+        }
     }
 
     public ResultCode register(RegisterVo registerVo) {

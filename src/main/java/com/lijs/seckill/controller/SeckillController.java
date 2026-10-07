@@ -1,11 +1,11 @@
 package com.lijs.seckill.controller;
 
+import com.lijs.seckill.access.AccessLimit;
 import com.lijs.seckill.domain.OrderInfo;
 import com.lijs.seckill.domain.SeckillOrder;
 import com.lijs.seckill.domain.SeckillUser;
 import com.lijs.seckill.rabbitmq.MQSender;
 import com.lijs.seckill.rabbitmq.SeckillMessage;
-import com.lijs.seckill.redis.AccessKey;
 import com.lijs.seckill.redis.GoodsKey;
 import com.lijs.seckill.redis.RedisService;
 import com.lijs.seckill.redis.SeckillKey;
@@ -15,6 +15,7 @@ import com.lijs.seckill.service.GoodsService;
 import com.lijs.seckill.service.DeliveryAddressService;
 import com.lijs.seckill.service.OrderService;
 import com.lijs.seckill.service.SeckillService;
+import com.lijs.seckill.service.VerifyCodeService;
 import com.lijs.seckill.util.UUIDUtil;
 import com.lijs.seckill.vo.GoodsVo;
 import com.lijs.seckill.vo.SeckillWindowVo;
@@ -28,7 +29,6 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
 import javax.imageio.ImageIO;
-import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
@@ -48,6 +48,8 @@ public class SeckillController implements InitializingBean {
     private RedisService redisService;
     @Autowired
     private SeckillService seckillService;
+    @Autowired
+    private VerifyCodeService verifyCodeService;
     @Autowired
     private OrderService orderService;
     @Autowired
@@ -85,18 +87,15 @@ public class SeckillController implements InitializingBean {
      */
     @RequestMapping(value = "/verifyCode")
     @ResponseBody
-    public Result<String> verifyCode(HttpServletRequest request, Model model, SeckillUser user,
+    @AccessLimit(seconds = 5, maxCount = 5) // 验证码生成占用 CPU 与输出流，同一用户 5 秒内最多 5 次
+    public Result<String> verifyCode(Model model, SeckillUser user,
                                      @RequestParam("goodsId") Long goodsId, HttpServletResponse response) {
         model.addAttribute("user", user);
         // 如果用户为空则返回登录页面
         if (user == null) {
             return Result.error(ResultCode.SESSION_ERROR);
         }
-        // 验证码生成会占用 CPU 和输出流，限制为同一用户 5 秒内最多 5 次
-        if (isAccessLimited(request, user, 5)) {
-            return Result.error(ResultCode.ACCESS_LIMIT);
-        }
-        BufferedImage img = seckillService.createSeckillVerifyCode(user, goodsId);
+        BufferedImage img = verifyCodeService.createSeckillVerifyCode(user, goodsId);
         try {
             OutputStream out = response.getOutputStream();
             ImageIO.write(img, "JPEG", out);
@@ -112,7 +111,6 @@ public class SeckillController implements InitializingBean {
     /**
      * 获取秒杀路径并验证验证码
      *
-     * @param request    HTTP请求
      * @param model      模型
      * @param user       秒杀用户
      * @param goodsId    商品ID
@@ -121,7 +119,8 @@ public class SeckillController implements InitializingBean {
      */
     @RequestMapping(value = "/getPath")
     @ResponseBody
-    public Result<String> getSeckillPath(HttpServletRequest request, Model model, SeckillUser user,
+    @AccessLimit(seconds = 5, maxCount = 5) // 5s 内最多 5 次；拦截器先于本方法执行，脚本高频请求会更早被拒
+    public Result<String> getSeckillPath(Model model, SeckillUser user,
                                          @RequestParam("goodsId") Long goodsId,
                                          @RequestParam(value = "verifyCode", defaultValue = "0") int verifyCode) {
         model.addAttribute("user", user);
@@ -133,12 +132,8 @@ public class SeckillController implements InitializingBean {
         if (window != ResultCode.SUCCESS) {
             return Result.error(window);
         }
-        // 限制访问次数：5s 之内最多 5 次
-        if (isAccessLimited(request, user, 5)) {
-            return Result.error(ResultCode.ACCESS_LIMIT);
-        }
         // 验证验证码
-        boolean check = seckillService.checkVCode(user, goodsId, verifyCode);
+        boolean check = verifyCodeService.checkVCode(user, goodsId, verifyCode);
         if (!check) {
             return Result.error(ResultCode.REQUEST_ILLEGAL);
         }
@@ -147,26 +142,6 @@ public class SeckillController implements InitializingBean {
         String path = seckillService.createSeckillPath(user, goodsId);
         logger.info("path:{}", path);
         return Result.success(path);
-    }
-
-    /**
-     * 基于 Redis 的按【接口 + 用户】访问频率限制，窗口由 AccessKey.access 的 TTL（5s）决定。
-     *
-     * @param maxCount 窗口内允许的最大访问次数
-     * @return true 表示已超限，调用方应拒绝本次请求
-     */
-    private boolean isAccessLimited(HttpServletRequest request, SeckillUser user, int maxCount) {
-        String key = request.getRequestURI() + "_" + user.getId();
-        Integer count = redisService.get(AccessKey.access, key, Integer.class);
-        if (count == null) {
-            redisService.set(AccessKey.access, key, 1);
-            return false;
-        }
-        if (count < maxCount) {
-            redisService.incr(AccessKey.access, key);
-            return false;
-        }
-        return true;
     }
 
     /**
@@ -184,14 +159,11 @@ public class SeckillController implements InitializingBean {
      */
     @RequestMapping(value = "/result", method = RequestMethod.GET)
     @ResponseBody
-    public Result<Long> result(HttpServletRequest request, SeckillUser user,
+    @AccessLimit(seconds = 5, maxCount = 10) // 退避策略下正常用户远达不到，异常刷接口才会触发
+    public Result<Long> result(SeckillUser user,
                                @RequestParam(value = "goodsId", defaultValue = "0") long goodsId) {
         if (user == null) {
             return Result.error(ResultCode.SESSION_ERROR);
-        }
-        // 5s 内最多 10 次：退避策略下正常用户远达不到，异常刷接口才会触发
-        if (isAccessLimited(request, user, 10)) {
-            return Result.error(ResultCode.ACCESS_LIMIT);
         }
         long result = seckillService.getSeckillResult(user.getId(), goodsId);
         logger.info("轮询 result:{}", result);

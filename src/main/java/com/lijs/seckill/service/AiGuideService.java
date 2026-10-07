@@ -1,5 +1,7 @@
 package com.lijs.seckill.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lijs.seckill.redis.AiHistoryKey;
 import com.lijs.seckill.redis.RedisService;
 import com.lijs.seckill.dao.OrderDao;
@@ -10,10 +12,12 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import javax.annotation.PreDestroy;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
@@ -62,8 +66,8 @@ public class AiGuideService {
     @Autowired
     private RedisService redisService;
 
-    private final RestTemplate restTemplate = new RestTemplate();
-    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
+    private final RestTemplate restTemplate = createRestTemplate();
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     /** 流式请求使用有界线程池，防止并发 AI 请求打爆 JVM */
     private final ExecutorService streamExecutor = new ThreadPoolExecutor(
@@ -73,6 +77,20 @@ public class AiGuideService {
             new LinkedBlockingQueue<>(200),              // 有界队列，最多积压 200 个请求
             new ThreadPoolExecutor.AbortPolicy()         // 队列满时拒绝，由调用方降级处理
     );
+
+    /** 与流式路径 openConnection() 的超时对齐（连接 10s / 读取 120s），避免请求挂死。 */
+    private static RestTemplate createRestTemplate() {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(10_000);
+        factory.setReadTimeout(120_000);
+        return new RestTemplate(factory);
+    }
+
+    /** 应用停机时关闭线程池，避免非守护线程阻塞 JVM 退出。 */
+    @PreDestroy
+    public void shutdownStreamExecutor() {
+        streamExecutor.shutdown();
+    }
 
     // -------------------------------------------------------------------------
     // 普通（非流式）对话
@@ -119,65 +137,67 @@ public class AiGuideService {
         appendMessage(sessionId, "user", message);
         List<Map<String, String>> history = getHistory(sessionId);
 
-        // 收集本次完整回复，流结束后存入历史
-        StringBuilder fullReply = new StringBuilder();
-
         try {
-            streamExecutor.execute(() -> {
-            HttpURLConnection conn = null;
-            try {
-                conn = openConnection();
-                writeRequestBody(conn, history, userId, lang, true);
-
-                // 读取 Claude SSE 流
-                try (BufferedReader reader = new BufferedReader(
-                        new InputStreamReader(conn.getInputStream(), "UTF-8"))) {
-                    String line;
-                    while ((line = reader.readLine()) != null) {
-                        if (!line.startsWith("data: ")) continue;
-                        String data = line.substring(6).trim();
-                        if (data.isEmpty() || "[DONE]".equals(data)) continue;
-
-                        String text = extractTextDelta(data);
-                        if (text == null) continue;
-
-                        fullReply.append(text);
-                        // 转义 JSON 特殊字符后推送给前端
-                        emitter.send(SseEmitter.event()
-                                .data("{\"text\":\"" + escapeJson(text) + "\"}"));
-                    }
-                }
-
-                // 流结束：写入 assistant 回复
-                appendMessage(sessionId, "assistant", fullReply.toString());
-                emitter.send(SseEmitter.event().name("done").data("{}"));
-                emitter.complete();
-
-            } catch (Exception e) {
-                logger.error("流式调用 Claude API 失败: {}", e.getMessage(), e);
-                rollbackLastMessage(sessionId); // 撤销刚追加的 user 消息
-                try {
-                    emitter.send(SseEmitter.event().name("error")
-                            .data("{\"msg\":\"" + localizedError(lang) + "\"}"));
-                    emitter.complete();
-                } catch (Exception ignored) {
-                    emitter.completeWithError(e);
-                }
-            } finally {
-                if (conn != null) conn.disconnect();
-            }
-        });
+            streamExecutor.execute(() -> doStreamChat(sessionId, history, userId, lang, emitter));
         } catch (RejectedExecutionException e) {
             // 线程池已满，降级处理：回滚用户消息，通知前端 AI 繁忙
             rollbackLastMessage(sessionId);
             logger.warn("AI 导购线程池已满，请求被拒绝: {}", e.getMessage());
-            try {
-                emitter.send(SseEmitter.event().name("error")
-                        .data("{\"msg\":\"" + localizedError(lang) + "（服务繁忙，请稍后重试）\"}"));
-                emitter.complete();
-            } catch (Exception ignored) {
-                emitter.completeWithError(e);
+            sendSseError(emitter, localizedError(lang) + "（服务繁忙，请稍后重试）", e);
+        }
+    }
+
+    /** 后台线程执行：向 Claude 发起 SSE 请求，逐块转发给前端，流结束后写入 assistant 历史。 */
+    private void doStreamChat(String sessionId, List<Map<String, String>> history,
+                              Long userId, String lang, SseEmitter emitter) {
+        // 收集本次完整回复，流结束后存入历史
+        StringBuilder fullReply = new StringBuilder();
+        HttpURLConnection conn = null;
+        try {
+            conn = openConnection();
+            writeRequestBody(conn, history, userId, lang);
+
+            // 读取 Claude SSE 流
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(conn.getInputStream(), "UTF-8"))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    if (!line.startsWith("data: ")) continue;
+                    String data = line.substring(6).trim();
+                    if (data.isEmpty() || "[DONE]".equals(data)) continue;
+
+                    String text = extractTextDelta(data);
+                    if (text == null) continue;
+
+                    fullReply.append(text);
+                    // 序列化为 JSON 后推送给前端
+                    emitter.send(SseEmitter.event()
+                            .data(objectMapper.writeValueAsString(Collections.singletonMap("text", text))));
+                }
             }
+
+            // 流结束：写入 assistant 回复
+            appendMessage(sessionId, "assistant", fullReply.toString());
+            emitter.send(SseEmitter.event().name("done").data("{}"));
+            emitter.complete();
+
+        } catch (Exception e) {
+            logger.error("流式调用 Claude API 失败: {}", e.getMessage(), e);
+            rollbackLastMessage(sessionId); // 撤销刚追加的 user 消息
+            sendSseError(emitter, localizedError(lang), e);
+        } finally {
+            if (conn != null) conn.disconnect();
+        }
+    }
+
+    /** 发送 error 事件后关闭 emitter；发送失败则携带异常关闭。 */
+    private void sendSseError(SseEmitter emitter, String message, Exception cause) {
+        try {
+            emitter.send(SseEmitter.event().name("error")
+                    .data("{\"msg\":\"" + message + "\"}"));
+            emitter.complete();
+        } catch (Exception ignored) {
+            emitter.completeWithError(cause);
         }
     }
 
@@ -199,11 +219,7 @@ public class AiGuideService {
         headers.set("x-api-key", apiKey);
         headers.set("anthropic-version", "2023-06-01");
 
-        Map<String, Object> body = new HashMap<>();
-        body.put("model", model);
-        body.put("max_tokens", maxTokens);
-        body.put("system", buildSystemPrompt(userId, lang));
-        body.put("messages", history);
+        Map<String, Object> body = buildRequestBody(history, userId, lang, false);
 
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
         // URI 重载避免 @NonNull String 警告
@@ -233,19 +249,27 @@ public class AiGuideService {
         return conn;
     }
 
-    private void writeRequestBody(HttpURLConnection conn,
-                                  List<Map<String, String>> history,
-                                  Long userId, String lang, boolean stream) throws Exception {
-        // 手动拼 JSON（项目用 FastJSON，但这里层次简单，直接用 Jackson ObjectMapper 更干净）
-        com.fasterxml.jackson.databind.ObjectMapper om = new com.fasterxml.jackson.databind.ObjectMapper();
+    /**
+     * 构建 Claude /v1/messages 请求体；stream=true 时要求 SSE 流式返回。
+     * 同步与流式两条路径共用，避免字段漂移。
+     */
+    private Map<String, Object> buildRequestBody(List<Map<String, String>> history,
+                                                 Long userId, String lang, boolean stream) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("model", model);
         body.put("max_tokens", maxTokens);
-        body.put("stream", stream);
         body.put("system", buildSystemPrompt(userId, lang));
         body.put("messages", history);
+        if (stream) {
+            body.put("stream", true);
+        }
+        return body;
+    }
 
-        byte[] bytes = om.writeValueAsBytes(body);
+    private void writeRequestBody(HttpURLConnection conn,
+                                  List<Map<String, String>> history,
+                                  Long userId, String lang) throws Exception {
+        byte[] bytes = objectMapper.writeValueAsBytes(buildRequestBody(history, userId, lang, true));
         try (OutputStream os = conn.getOutputStream()) {
             os.write(bytes);
         }
@@ -330,23 +354,14 @@ public class AiGuideService {
      */
     private String extractTextDelta(String jsonData) {
         try {
-            com.fasterxml.jackson.databind.ObjectMapper om = new com.fasterxml.jackson.databind.ObjectMapper();
-            com.fasterxml.jackson.databind.JsonNode root = om.readTree(jsonData);
+            JsonNode root = objectMapper.readTree(jsonData);
             if (!"content_block_delta".equals(root.path("type").asText())) return null;
-            com.fasterxml.jackson.databind.JsonNode delta = root.path("delta");
+            JsonNode delta = root.path("delta");
             if (!"text_delta".equals(delta.path("type").asText())) return null;
             return delta.path("text").asText(null);
         } catch (Exception e) {
             return null;
         }
-    }
-
-    private static String escapeJson(String s) {
-        return s.replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r")
-                .replace("\t", "\\t");
     }
 
     private static String localizedError(String lang) {
@@ -398,12 +413,5 @@ public class AiGuideService {
      */
     private void rollbackLastMessage(String sessionId) {
         redisService.listRpop(AiHistoryKey.history, sessionId);
-    }
-
-    private static Map<String, String> buildMsg(String role, String content) {
-        Map<String, String> m = new HashMap<>();
-        m.put("role", role);
-        m.put("content", content);
-        return m;
     }
 }

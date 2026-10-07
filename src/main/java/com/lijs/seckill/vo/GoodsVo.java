@@ -44,15 +44,33 @@ public class GoodsVo extends Goods {
     public Integer getVersion()                   { return version; }
     public void    setVersion(Integer v)          { this.version = v; }
 
+    /** 秒杀时间窗是否非法：缺少时间或结束时间不晚于开始时间。 */
+    public boolean isInvalidWindow() {
+        return startDate == null || endDate == null || !startDate.before(endDate);
+    }
+
     /** 0=未开始，1=进行中，2=已结束。用于列表和详情页展示。 */
     public int getActivityStatus() {
-        if (startDate == null || endDate == null || !startDate.before(endDate)) {
+        if (isInvalidWindow()) {
             return 2;
         }
         Date now = new Date();
         if (now.before(startDate)) return 0;
         if (now.after(endDate)) return 2;
         return 1;
+    }
+
+    /** 距秒杀开始的倒计时秒数：未开始>0，进行中=0，已结束=-1。用于详情页倒计时。 */
+    public int getRemainingSeconds() {
+        if (startDate == null || endDate == null) {
+            return -1;
+        }
+        long now = System.currentTimeMillis();
+        long start = startDate.getTime();
+        if (now < start) {
+            return (int) ((start - now) / 1000);
+        }
+        return now > endDate.getTime() ? -1 : 0;
     }
 
     public boolean isSoldOut() {

@@ -136,4 +136,29 @@ class MQReceiverTest {
         verify(channel).basicNack(13L, false, false);
         verify(channel, never()).basicAck(13L, false);
     }
+
+    @Test
+    void nackFailureIsSwallowed() throws Exception {
+        when(seckillService.seckillWithCache(any(SeckillUser.class),
+                eq(goodsVo), isNull(Long.class)))
+                .thenThrow(new IllegalStateException("database unavailable"));
+        doThrow(new IOException("channel closed")).when(channel).basicNack(13L, false, false);
+
+        receiver.receiveSeckill(payload, channel, 13L);
+
+        verify(channel, never()).basicAck(13L, false);
+    }
+
+    @Test
+    void releasedReservationLeadsToDeadLetterWithoutRollback() throws Exception {
+        when(seckillService.seckillWithCache(any(SeckillUser.class),
+                eq(goodsVo), isNull(Long.class))).thenReturn(new OrderInfo());
+        when(redisService.markReservationCommitted("res-1")).thenReturn(false);
+
+        receiver.receiveSeckill(payload, channel, 11L);
+
+        verify(redisService, never()).rollbackStockOnce(GoodsKey.getSeckillGoodsStock, "9", "res-1");
+        verify(channel).basicNack(11L, false, false);
+        verify(channel, never()).basicAck(11L, false);
+    }
 }

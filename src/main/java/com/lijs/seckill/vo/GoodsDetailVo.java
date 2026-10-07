@@ -28,8 +28,8 @@ public class GoodsDetailVo {
 
     public int        getStatus()                      { return status; }
     public void       setStatus(int status)            { this.status = status; }
-    public int        getremainingSeconds()            { return remainingSeconds; }
-    public void       setremainingSeconds(int v)       { this.remainingSeconds = v; }
+    public int        getRemainingSeconds()            { return remainingSeconds; }
+    public void       setRemainingSeconds(int v)       { this.remainingSeconds = v; }
     public GoodsVo    getGoodsVo()                     { return goodsVo; }
     public void       setGoodsVo(GoodsVo goodsVo)     { this.goodsVo = goodsVo; }
     public UserInfoVo getUser()                       { return user; }

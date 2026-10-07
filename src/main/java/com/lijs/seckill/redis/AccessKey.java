@@ -7,23 +7,14 @@ package com.lijs.seckill.redis;
  * TTL 由 {@link #expire(int)} 动态指定，等于 @AccessLimit 注解中的 seconds 参数，
  * 即"时间窗口到期时 key 自动删除，计数自动重置"。
  *
- * <p>使用方式：
- * <ul>
- *   <li>{@link #access} — 固定 5s 窗口的静态实例，供 {@link com.lijs.seckill.controller.SeckillController} 内联限流使用</li>
- *   <li>{@link #expire(int)} — 根据 @AccessLimit 注解动态创建，供 {@link com.lijs.seckill.access.AccessInterceptor} 使用</li>
- * </ul>
+ * <p>限流 key 由 {@link #expire(int)} 按 @AccessLimit 注解的 seconds 动态创建，
+ * 供 {@link com.lijs.seckill.access.AccessInterceptor} 使用。
  */
 public class AccessKey extends BasePrefix {
 
     public AccessKey(int expireSeconds, String prefix) {
         super(expireSeconds, prefix);
     }
-
-    /**
-     * 固定 5s 窗口的访问计数 key，供 SeckillController 内联限流直接使用。
-     * Redis key 格式：{@code AccessKey:access<uri_userId>}，TTL = 5s
-     */
-    public static AccessKey access = new AccessKey(5, "access");
 
     /**
      * 根据 @AccessLimit 注解动态创建限流 key，TTL = 注解中指定的 seconds。

@@ -108,7 +108,6 @@ public class UserController {
      * <ul>
      *   <li>user      — 当前登录用户</li>
      *   <li>goods     — 商品+秒杀价格等信息（GoodsVo）</li>
-     *   <li>status    — 秒杀状态（0=未开始 1=进行中 2=已结束）</li>
      *   <li>remainingSeconds — 距开始的倒计时秒数（已结束时为 -1）</li>
      * </ul>
      *
@@ -127,33 +126,12 @@ public class UserController {
             model.addAttribute("errorMessage", ResultCode.GOODS_NOT_EXIST.getMsg());
             return "seckill_fail";
         }
-        if (goods.getStartDate() == null || goods.getEndDate() == null
-                || !goods.getStartDate().before(goods.getEndDate())) {
+        if (goods.isInvalidWindow()) {
             model.addAttribute("errorMessage", ResultCode.GOODS_TIME_INVALID.getMsg());
             return "seckill_fail";
         }
         model.addAttribute("goods", goods);
-
-        // 根据当前时间与秒杀时间区间判断秒杀状态
-        long start = goods.getStartDate().getTime();
-        long end   = goods.getEndDate().getTime();
-        long now   = System.currentTimeMillis();
-
-        int status;           // 0=未开始 1=进行中 2=已结束
-        int remainingSeconds; // 距秒杀开始的倒计时（秒），进行中为 0，已结束为 -1
-
-        if (now < start) {          // 秒杀还未开始，计算倒计时
-            status = 0;
-            remainingSeconds = (int) ((start - now) / 1000);
-        } else if (now > end) {     // 秒杀已结束
-            status = 2;
-            remainingSeconds = -1;
-        } else {                    // 秒杀进行中
-            status = 1;
-            remainingSeconds = 0;
-        }
-        model.addAttribute("status", status);
-        model.addAttribute("remainingSeconds", remainingSeconds);
+        model.addAttribute("remainingSeconds", goods.getRemainingSeconds());
         return "goods_detail";
     }
 }

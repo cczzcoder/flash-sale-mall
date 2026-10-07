@@ -11,6 +11,8 @@ import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 
 import java.util.List;
+import java.util.function.Consumer;
+import java.util.function.Function;
 
 @DependsOn("jedisPool") // 确保 jedisPoolConfig 先加载
 @Service
@@ -22,51 +24,63 @@ public class RedisService {
     private JedisPool jedisPool;
 
     /**
-     * 获取单个对象
+     * 统一获取/归还 Jedis 连接：所有 Redis 操作经此执行，
+     * 消除每个方法里重复的 getResource + try/finally close 样板。
+     * 只负责归还连接，不吞异常。
      */
-    public <T> T get(KeyPrefix prefix, String key, Class<T> data) {
-        logger.info("get key:{}", key);
+    private <T> T execute(Function<Jedis, T> action) {
         Jedis jedis = null;
         try {
             jedis = jedisPool.getResource();
-            // 生成真正的key  className+":"+prefix;  BasePrefix:id1
-            String realKey = prefix.getPrefix() + key;
-            logger.info("get realKey:{}", realKey);
-            String value = jedis.get(realKey);
-            logger.info("get value:{}", value);
-            // 将String转换为Bean
-            return stringToBean(value, data);
+            return action.apply(jedis);
         } finally {
             close(jedis);
         }
+    }
+
+    /** 无返回值的 Redis 操作。 */
+    private void executeVoid(Consumer<Jedis> action) {
+        execute(jedis -> {
+            action.accept(jedis);
+            return null;
+        });
+    }
+
+    /**
+     * 获取单个对象
+     */
+    public <T> T get(KeyPrefix prefix, String key, Class<T> data) {
+        logger.debug("get key:{}", key);
+        return execute(jedis -> {
+            // 生成真正的key  className+":"+prefix;  BasePrefix:id1
+            String realKey = prefix.getPrefix() + key;
+            logger.debug("get realKey:{}", realKey);
+            String value = jedis.get(realKey);
+            logger.debug("get value:{}", value);
+            // 将String转换为Bean
+            return stringToBean(value, data);
+        });
     }
 
     /**
      * redis删除对象
      */
     public boolean delete(KeyPrefix prefix, String key) {
-        Jedis jedis = null;
-        try {
-            jedis = jedisPool.getResource();
+        return execute(jedis -> {
             String realKey = prefix.getPrefix() + key;
-            long ret = jedis.del(realKey);
             // 删除成功，返回大于0
-            return ret > 0;
-        } finally {
-            close(jedis);
-        }
+            return jedis.del(realKey) > 0;
+        });
     }
 
     /**
      * 设置redis对象
      */
     public <T> boolean set(KeyPrefix prefix, String key, T value) {
-        logger.info("set key:{}", key);
-        Jedis jedis = null;
-        try {
-            jedis = jedisPool.getResource();
+        logger.debug("set key:{}", key);
+        return execute(jedis -> {
             String realKey = prefix.getPrefix() + key;
-            logger.info("set realKey:{}", realKey);
+            logger.debug("set realKey:{}", realKey);
             String s = beanToString(value);
             if (s == null || s.isEmpty()) {
                 return false;
@@ -80,9 +94,7 @@ public class RedisService {
                 jedis.setex(realKey, seconds, s);
             }
             return true;
-        } finally {
-            close(jedis);
-        }
+        });
     }
 
     /**
@@ -91,9 +103,7 @@ public class RedisService {
      * already-consumed Redis reservation with the database snapshot.
      */
     public <T> boolean setIfAbsent(KeyPrefix prefix, String key, T value) {
-        Jedis jedis = null;
-        try {
-            jedis = jedisPool.getResource();
+        return execute(jedis -> {
             String realKey = prefix.getPrefix() + key;
             String serialized = beanToString(value);
             if (serialized == null || serialized.isEmpty()) {
@@ -104,51 +114,28 @@ public class RedisService {
                 jedis.expire(realKey, prefix.expireSeconds());
             }
             return created == 1;
-        } finally {
-            close(jedis);
-        }
+        });
     }
 
     /**
      * 减少值
      */
-    public <T> Long decr(KeyPrefix prefix, String key) {
-        Jedis jedis = null;
-        try {
-            jedis = jedisPool.getResource();
-            String realKey = prefix.getPrefix() + key;
-            return jedis.decr(realKey);
-        } finally {
-            close(jedis);
-        }
+    public Long decr(KeyPrefix prefix, String key) {
+        return execute(jedis -> jedis.decr(prefix.getPrefix() + key));
     }
 
     /**
      * 增加值
      */
-    public <T> void incr(KeyPrefix prefix, String key) {
-        Jedis jedis = null;
-        try {
-            jedis = jedisPool.getResource();
-            String realKey = prefix.getPrefix() + key;
-            jedis.incr(realKey);
-        } finally {
-            close(jedis);
-        }
+    public void incr(KeyPrefix prefix, String key) {
+        executeVoid(jedis -> jedis.incr(prefix.getPrefix() + key));
     }
 
     /**
-     * 检查key是否存在
+     * 判断 key 是否存在
      */
-    public <T> boolean exitsKey(KeyPrefix prefix, String key) {
-        Jedis jedis = null;
-        try {
-            jedis = jedisPool.getResource();
-            String realKey = prefix.getPrefix() + key;
-            return jedis.exists(realKey);
-        } finally {
-            close(jedis);
-        }
+    public boolean existsKey(KeyPrefix prefix, String key) {
+        return execute(jedis -> jedis.exists(prefix.getPrefix() + key));
     }
 
     /**
@@ -204,9 +191,7 @@ public class RedisService {
     }
 
     public <T> boolean set(String key, T value) {
-        Jedis jedis = null;
-        try {
-            jedis = jedisPool.getResource();
+        return execute(jedis -> {
             // 将T类型转换为String类型
             String s = beanToString(value);
             if (s == null) {
@@ -214,20 +199,11 @@ public class RedisService {
             }
             jedis.set(key, s);
             return true;
-        } finally {
-            close(jedis);
-        }
+        });
     }
 
     public <T> T get(String key, Class<T> data) {
-        Jedis jedis = null;
-        try {
-            jedis = jedisPool.getResource();
-            String value = jedis.get(key);
-            return stringToBean(value, data);
-        } finally {
-            close(jedis);
-        }
+        return execute(jedis -> stringToBean(jedis.get(key), data));
     }
 
     /**
@@ -241,9 +217,7 @@ public class RedisService {
      * @return 扣减成功返回 true，库存不足返回 false
      */
     public boolean preDecrStock(KeyPrefix prefix, String key) {
-        Jedis jedis = null;
-        try {
-            jedis = jedisPool.getResource();
+        return execute(jedis -> {
             String realKey = prefix.getPrefix() + key;
 
             // Lua 脚本：GET + 判断 + DECR 原子执行，避免两步操作之间崩溃留下负值
@@ -262,11 +236,9 @@ public class RedisService {
                 logger.warn("库存不足，预扣失败, key: {}", realKey);
                 return false;
             }
-            logger.info("库存预减后数量: {}, key: {}", stock, realKey);
+            logger.debug("库存预减后数量: {}, key: {}", stock, realKey);
             return true;
-        } finally {
-            close(jedis);
-        }
+        });
     }
 
     /**
@@ -284,9 +256,7 @@ public class RedisService {
             rollbackStock(stockPrefix, stockKey);
             return true;
         }
-        Jedis jedis = null;
-        try {
-            jedis = jedisPool.getResource();
+        return execute(jedis -> {
             String stockRedisKey = stockPrefix.getPrefix() + stockKey;
             String reservationRedisKey = GoodsKey.getSeckillReservation.getPrefix() + reservationId;
             int ttl = GoodsKey.getSeckillReservation.expireSeconds();
@@ -298,9 +268,7 @@ public class RedisService {
             Object result = jedis.eval(luaScript, 2, stockRedisKey, reservationRedisKey,
                     "1", String.valueOf(ttl), "RELEASED");
             return result != null && ((Long) result) == 1L;
-        } finally {
-            close(jedis);
-        }
+        });
     }
 
     /** 标记 reservation 已完成 DB 下单，供 ACK 失败后的重复投递识别。 */
@@ -308,9 +276,7 @@ public class RedisService {
         if (reservationId == null || reservationId.trim().isEmpty()) {
             return false;
         }
-        Jedis jedis = null;
-        try {
-            jedis = jedisPool.getResource();
+        return execute(jedis -> {
             String reservationRedisKey = GoodsKey.getSeckillReservation.getPrefix() + reservationId;
             int ttl = GoodsKey.getSeckillReservation.expireSeconds();
             String luaScript =
@@ -322,9 +288,7 @@ public class RedisService {
             Object result = jedis.eval(luaScript, 1, reservationRedisKey,
                     String.valueOf(ttl), "COMMITTED");
             return result != null && ((Long) result) == 1L;
-        } finally {
-            close(jedis);
-        }
+        });
     }
 
     /** 判断 reservation 是否已经完成 DB 下单。 */
@@ -341,16 +305,12 @@ public class RedisService {
         if (count <= 0) {
             throw new IllegalArgumentException("count must be positive");
         }
-        Jedis jedis = null;
-        try {
-            jedis = jedisPool.getResource();
+        return execute(jedis -> {
             String realKey = prefix.getPrefix() + key;
             long stock = jedis.incrBy(realKey, count);
             logger.info("库存回滚成功, key: {}, count: {}, stock: {}", realKey, count, stock);
             return stock;
-        } finally {
-            close(jedis);
-        }
+        });
     }
 
     /**
@@ -363,9 +323,7 @@ public class RedisService {
      * @return true 表示成功修正，false 表示值已变化（有并发扣减）或 key 不存在
      */
     public boolean compareAndSetStock(KeyPrefix prefix, String key, long expect, long newValue) {
-        Jedis jedis = null;
-        try {
-            jedis = jedisPool.getResource();
+        return execute(jedis -> {
             String realKey = prefix.getPrefix() + key;
 
             // KEYS[1]=库存key, ARGV[1]=期望值, ARGV[2]=修正值
@@ -382,9 +340,7 @@ public class RedisService {
             Object r = jedis.eval(luaScript, 1, realKey,
                     String.valueOf(expect), String.valueOf(newValue));
             return r != null && ((Long) r) == 1L;
-        } finally {
-            close(jedis);
-        }
+        });
     }
 
     // -------------------------------------------------------------------------
@@ -402,9 +358,7 @@ public class RedisService {
      * @param ttlSecs  key 过期时间（秒）
      */
     public void listAppend(KeyPrefix prefix, String key, String value, int maxSize, int ttlSecs) {
-        Jedis jedis = null;
-        try {
-            jedis = jedisPool.getResource();
+        executeVoid(jedis -> {
             String realKey = prefix.getPrefix() + key;
             // 原子：RPUSH + LTRIM（保留末尾 maxSize 条）+ EXPIRE
             String lua =
@@ -413,9 +367,7 @@ public class RedisService {
                 "redis.call('EXPIRE', KEYS[1], tonumber(ARGV[3])) " +
                 "return 1";
             jedis.eval(lua, 1, realKey, value, String.valueOf(maxSize), String.valueOf(ttlSecs));
-        } finally {
-            close(jedis);
-        }
+        });
     }
 
     /**
@@ -424,14 +376,7 @@ public class RedisService {
      * @return 消息字符串列表，key 不存在时返回空 List
      */
     public List<String> listRange(KeyPrefix prefix, String key) {
-        Jedis jedis = null;
-        try {
-            jedis = jedisPool.getResource();
-            String realKey = prefix.getPrefix() + key;
-            return jedis.lrange(realKey, 0, -1);
-        } finally {
-            close(jedis);
-        }
+        return execute(jedis -> jedis.lrange(prefix.getPrefix() + key, 0, -1));
     }
 
     /**
@@ -440,13 +385,6 @@ public class RedisService {
      * @return 被移除的消息字符串；List 为空或 key 不存在时返回 null
      */
     public String listRpop(KeyPrefix prefix, String key) {
-        Jedis jedis = null;
-        try {
-            jedis = jedisPool.getResource();
-            String realKey = prefix.getPrefix() + key;
-            return jedis.rpop(realKey);
-        } finally {
-            close(jedis);
-        }
+        return execute(jedis -> jedis.rpop(prefix.getPrefix() + key));
     }
 }

@@ -1,7 +1,6 @@
 package com.lijs.seckill.rabbitmq;
 
 import com.lijs.seckill.domain.OrderInfo;
-import com.lijs.seckill.domain.SeckillUser;
 import com.lijs.seckill.redis.GoodsKey;
 import com.lijs.seckill.redis.RedisService;
 import com.lijs.seckill.service.GoodsService;
@@ -42,12 +41,25 @@ public class MQReceiver {
     @RabbitListener(queues = MQConfig.SECKILL)
     public void receiveSeckill(String message,
                                Channel channel,
-                               @Header(AmqpHeaders.DELIVERY_TAG) long tag) throws IOException {
+                               @Header(AmqpHeaders.DELIVERY_TAG) long tag) {
         logger.info("receive seckill message: {}", message);
         SeckillMessage mm = RedisService.stringToBean(message, SeckillMessage.class);
-        SeckillUser user = mm.getUser();
-        long goodsId = mm.getGoodsId();
+        try {
+            consumeSeckill(mm);
+        } catch (Exception e) {
+            logger.error("秒杀消费异常，消息转入死信队列 goodsId={}: {}", mm.getGoodsId(), e.getMessage(), e);
+            nackToDeadLetter(channel, tag, mm.getGoodsId());
+            return;
+        }
+        ackSafely(channel, tag, mm);
+    }
 
+    /**
+     * 核心业务：DB 扣库存 + 写订单 + 库存补偿。
+     * 重复下单视为幂等成功正常返回；其余异常完成补偿后上抛，由调用方转死信队列。
+     */
+    private void consumeSeckill(SeckillMessage mm) throws Exception {
+        long goodsId = mm.getGoodsId();
         boolean dbCommitted = false;
         try {
             GoodsVo goodsVo = goodsService.getGoodsVoByGoodsId(goodsId);
@@ -55,7 +67,7 @@ public class MQReceiver {
             // 1.事务：DB 扣库存 + 写订单。
             //   不再预判库存/预查重复订单：扣减 SQL 的受影响行数本身就是权威判定，
             //   重复下单由 seckill_order 唯一索引 u_uid_gid 兜底，省两次热路径查询。
-            OrderInfo result = seckillService.seckillWithCache(user, goodsVo, mm.getDeliveryAddrId());
+            OrderInfo result = seckillService.seckillWithCache(mm.getUser(), goodsVo, mm.getDeliveryAddrId());
             if (result == null) {
                 // reduceStock 返回 false（库存已耗尽），补偿 Redis 库存
                 rollbackReservation(mm);
@@ -73,29 +85,33 @@ public class MQReceiver {
             if (!redisService.isReservationCommitted(mm.getReservationId())) {
                 rollbackReservation(mm);
             }
-            logger.info("重复下单，幂等丢弃 userId={} goodsId={}", user.getId(), goodsId);
+            logger.info("重复下单，幂等丢弃 userId={} goodsId={}", mm.getUser().getId(), goodsId);
 
         } catch (Exception e) {
-            logger.error("秒杀消费异常，消息转入死信队列 goodsId={}: {}", goodsId, e.getMessage(), e);
             // 只有 DB 未提交时才回补；提交后发生的 Redis 异常不能再增加库存。
             if (!dbCommitted) {
                 rollbackReservation(mm);
             }
-            // requeue=false → 消息进入死信队列，不无限重投
-            try {
-                channel.basicNack(tag, false, false);
-            } catch (IOException nackError) {
-                logger.error("秒杀消息 basicNack 失败 goodsId={}", goodsId, nackError);
-            }
-            return;
+            throw e;
         }
+    }
 
-        // ACK 失败只会让 RabbitMQ 重投，不能进入库存补偿分支。
+    /** 确认消息；ACK 失败只记日志——等待 RabbitMQ 重投，由 reservation 状态保证幂等。 */
+    private void ackSafely(Channel channel, long tag, SeckillMessage mm) {
         try {
             channel.basicAck(tag, false);
-        } catch (IOException ackError) {
+        } catch (IOException e) {
             logger.error("秒杀消息 basicAck 失败，等待 RabbitMQ 重投 goodsId={}, reservationId={}",
-                    goodsId, mm.getReservationId(), ackError);
+                    mm.getGoodsId(), mm.getReservationId(), e);
+        }
+    }
+
+    /** 拒绝消息进死信队列（requeue=false，不无限重投）；NACK 本身失败只记日志。 */
+    private void nackToDeadLetter(Channel channel, long tag, long goodsId) {
+        try {
+            channel.basicNack(tag, false, false);
+        } catch (IOException e) {
+            logger.error("秒杀消息 basicNack 失败 goodsId={}", goodsId, e);
         }
     }
 

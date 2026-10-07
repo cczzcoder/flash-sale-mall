@@ -26,7 +26,7 @@ public class ResultCode {
     public static ResultCode BIND_ERROR      = new ResultCode(500101, "参数校验异常:%s");
     public static ResultCode REQUEST_ILLEGAL = new ResultCode(500102, "非法请求!");
     public static ResultCode SECKILL_FAIL    = new ResultCode(500103, "秒杀失败!");
-    /** 接口访问频率超限（由 AccessInterceptor / isAccessLimited 触发） */
+    /** 接口访问频率超限（由 AccessInterceptor 根据 @AccessLimit 注解触发） */
     public static ResultCode ACCESS_LIMIT    = new ResultCode(500104, "达到访问限制次数，访问太频繁!");
 
     // ----------------------------- 用户/认证 -------------------------
