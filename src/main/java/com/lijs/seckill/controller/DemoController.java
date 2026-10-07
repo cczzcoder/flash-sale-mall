@@ -49,7 +49,7 @@ public class DemoController {
      */
     @RequestMapping("/thymeleaf")
     public String helloThymeleaf(Model model) {
-        model.addAttribute("name", "pitt1997");
+        model.addAttribute("name", "demo");
         return "hello"; // 他会从配置文件里面去找
     }
 

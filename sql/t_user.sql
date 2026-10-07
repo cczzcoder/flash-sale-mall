@@ -7,4 +7,4 @@ CREATE TABLE `t_user` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户表';
 
 INSERT INTO `t_user` VALUES ('1', 'admin');
-INSERT INTO `t_user` VALUES ('2', 'pitt1997');
+INSERT INTO `t_user` VALUES ('2', 'demo');

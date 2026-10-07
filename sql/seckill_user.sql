@@ -13,7 +13,7 @@ CREATE TABLE `seckill_user` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='秒杀用户表';
 
 INSERT INTO `seckill_user` VALUES ('15008888881', 'tom', 'e5d22cfc746c7da8da84e0a996e0fffa', '1a2b3c4d', '1a2b3c4d', '2019-05-13 19:17:54', '2019-05-13 19:17:57', '1');
-INSERT INTO `seckill_user` VALUES ('15008888888', 'pitt1997', 'e5d22cfc746c7da8da84e0a996e0fffa', '1a2b3c4d', '1a2b3c4d', '2019-05-06 20:32:29', '2019-05-06 20:32:34', '1');
+INSERT INTO `seckill_user` VALUES ('15008888888', 'demo', 'e5d22cfc746c7da8da84e0a996e0fffa', '1a2b3c4d', '1a2b3c4d', '2019-05-06 20:32:29', '2019-05-06 20:32:34', '1');
 INSERT INTO `seckill_user` VALUES ('15200000000', 'user0', 'b7797cce01b4b131b433b6acf4add449', '1a2b3c4d', '/user/useri.png', '2019-05-23 15:44:46', null, '1');
 INSERT INTO `seckill_user` VALUES ('15200000001', 'user1', 'b7797cce01b4b131b433b6acf4add449', '1a2b3c4d', '/user/useri.png', '2019-05-23 15:44:46', null, '1');
 INSERT INTO `seckill_user` VALUES ('15200000002', 'user2', 'b7797cce01b4b131b433b6acf4add449', '1a2b3c4d', '/user/useri.png', '2019-05-23 15:44:46', null, '1');
