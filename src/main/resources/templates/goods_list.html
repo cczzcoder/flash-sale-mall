@@ -2,53 +2,66 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8"/>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>闪惠智购商城 — 秒杀商品列表</title>
-    <script type="text/javascript" th:src="@{/jquery-validation/lib/jquery-1.11.1.js}"></script>
-    <link  type="text/css" rel="stylesheet" th:href="@{/bootstrap/css/bootstrap.css}"/>
-    <script type="text/javascript" th:src="@{/bootstrap/js/bootstrap.min.js}"></script>
+    <link rel="stylesheet" th:href="@{/layui/css/layui.css}"/>
     <style>
-        body { background: #f4f4f8; font-family: 'PingFang SC','Microsoft YaHei',sans-serif; margin: 0; }
-        .topbar { background: linear-gradient(135deg,#1a1a2e,#16213e); padding: 14px 24px;
-                  display: flex; align-items: center; justify-content: space-between; }
-        .topbar .brand { color: #fff; font-size: 20px; font-weight: 900; letter-spacing: 1px; text-decoration: none; }
-        .topbar .brand .accent { color: #e74c3c; }
-        .topbar .nav-tip { color: rgba(255,255,255,.5); font-size: 13px; }
-        .hero { background: linear-gradient(135deg,#e74c3c 0%,#c0392b 60%,#922b21 100%);
-                color: #fff; padding: 40px 24px; text-align: center; }
-        .hero .live-badge { display: inline-block; background: rgba(255,255,255,.2);
-                            border: 1px solid rgba(255,255,255,.4); border-radius: 20px;
-                            padding: 3px 16px; font-size: 12px; margin-bottom: 14px; letter-spacing: 1px; }
+        body { background: #f4f4f8; font-family: 'PingFang SC','Microsoft YaHei',sans-serif; margin: 0; color: #333; min-width: 1200px; }
+        /* ---------- 顶部导航 ---------- */
+        .topbar { background: linear-gradient(135deg,#1a1a2e,#16213e); height: 64px; }
+        .topbar-inner { width: 1200px; margin: 0 auto; height: 100%; display: flex; align-items: center; justify-content: space-between; }
+        .brand { color: #fff; font-size: 20px; font-weight: 900; letter-spacing: 1px; text-decoration: none; }
+        .brand:hover { color: #fff; text-decoration: none; }
+        .accent { color: #e74c3c; }
+        .topnav a { color: rgba(255,255,255,.72); font-size: 14px; text-decoration: none; margin-right: 28px; }
+        .topnav a:hover, .topnav a.active { color: #fff; }
+        .topbar-tip { color: rgba(255,255,255,.42); font-size: 13px; }
+        /* ---------- Hero ---------- */
+        .hero { background: linear-gradient(135deg,#e74c3c 0%,#c0392b 60%,#922b21 100%); color: #fff; }
+        .hero-inner { width: 1200px; margin: 0 auto; padding: 34px 0; display: flex; align-items: center; justify-content: space-between; overflow: hidden; }
+        .hero .live-badge { display: inline-block; background: rgba(255,255,255,.2); border: 1px solid rgba(255,255,255,.4);
+                            border-radius: 20px; padding: 3px 16px; font-size: 12px; margin-bottom: 12px; letter-spacing: 1px; }
         .hero h1 { font-size: 34px; font-weight: 900; letter-spacing: 3px; margin: 0 0 8px; }
         .hero .sub { font-size: 14px; opacity: .82; margin: 0; }
-        .section-title { font-size: 17px; font-weight: 700; color: #333;
-                         border-left: 4px solid #e74c3c; padding-left: 12px; margin: 28px 0 18px; }
-        .goods-card { background: #fff; border-radius: 14px; box-shadow: 0 2px 12px rgba(0,0,0,.07);
-                      overflow: hidden; transition: transform .2s, box-shadow .2s; height: 100%; display: flex; flex-direction: column; }
-        .goods-card:hover { transform: translateY(-5px); box-shadow: 0 10px 30px rgba(0,0,0,.13); }
-        .goods-thumb { background: linear-gradient(135deg,#f5f5f5,#ececec); height: 150px;
-                       display: flex; align-items: center; justify-content: center; font-size: 56px; overflow:hidden; }
-        .goods-thumb img { width:100%; height:100%; object-fit:cover; }
-        .goods-body { padding: 14px 16px 16px; flex: 1; display: flex; flex-direction: column; }
-        .goods-name { font-size: 14px; font-weight: 600; color: #333; margin-bottom: 10px; line-height: 1.5;
-                      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; flex: 1; }
+        .hero .watermark { font-size: 96px; opacity: .16; line-height: 1; user-select: none; }
+        /* ---------- 布局 ---------- */
+        .pc-container { width: 1200px; margin: 26px auto 70px; }
+        .section-head { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 20px; }
+        .section-title { font-size: 19px; font-weight: 800; color: #333; border-left: 4px solid #e74c3c; padding-left: 12px; }
+        .section-count { color: #999; font-size: 13px; }
+        .section-count b { color: #e74c3c; font-size: 15px; }
+        /* ---------- 商品卡片 ---------- */
+        .gcard { background: #fff; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,.06);
+                 overflow: hidden; transition: transform .2s, box-shadow .2s; height: 100%; display: flex; flex-direction: column; }
+        .gcard:hover { transform: translateY(-5px); box-shadow: 0 10px 30px rgba(0,0,0,.13); }
+        .gthumb { background: linear-gradient(135deg,#f5f5f5,#ececec); height: 190px; display: flex; align-items: center;
+                  justify-content: center; font-size: 64px; overflow: hidden; }
+        .gthumb img { width: 100%; height: 100%; object-fit: cover; transition: transform .3s; }
+        .gcard:hover .gthumb img { transform: scale(1.04); }
+        .gbody { padding: 16px 18px 18px; flex: 1; display: flex; flex-direction: column; }
+        .gname { font-size: 15px; font-weight: 600; color: #333; margin-bottom: 10px; line-height: 1.5;
+                 display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+                 flex: 1; text-decoration: none; min-height: 45px; }
+        .gname:hover { color: #e74c3c; text-decoration: none; }
         .price-row { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
-        .price-seckill { font-size: 22px; font-weight: 900; color: #e74c3c; }
-        .price-seckill::before { content: '¥'; font-size: 13px; vertical-align: baseline; }
+        .price-seckill { font-size: 24px; font-weight: 900; color: #e74c3c; }
+        .price-seckill::before { content: '¥'; font-size: 14px; }
         .price-origin  { font-size: 13px; color: #bbb; text-decoration: line-through; }
         .price-origin::before { content: '¥'; }
-        .stock-bar { background: #f0f0f0; border-radius: 4px; height: 5px; margin-bottom: 6px; overflow: hidden; }
-        .stock-fill { background: linear-gradient(90deg,#e74c3c,#f39c12); height: 100%; border-radius: 4px; }
-        .stock-tip { font-size: 12px; color: #e74c3c; font-weight: 500; margin-bottom: 12px; }
-        .activity-tag { display: inline-block; margin-bottom: 8px; font-size: 12px; font-weight: 700; color: #27ae60; }
-        .activity-tag.waiting { color: #4a90e2; }
-        .activity-tag.ended, .activity-tag.sold-out { color: #999; }
+        .stock-bar { background: #f0f0f0; border-radius: 4px; height: 6px; margin: 4px 0 6px; overflow: hidden; }
+        .stock-fill { background: linear-gradient(90deg,#e74c3c,#f39c12); height: 100%; border-radius: 4px; transition: width .4s; }
+        .stock-line { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+        .stock-tip { font-size: 12px; color: #e74c3c; font-weight: 500; }
+        .act-tag { display: inline-block; font-size: 12px; font-weight: 700; color: #27ae60; }
+        .act-tag.waiting { color: #4a90e2; }
+        .act-tag.ended, .act-tag.sold-out { color: #999; }
         .btn-buy { background: linear-gradient(135deg,#e74c3c,#c0392b); color: #fff; border: none;
-                   border-radius: 8px; width: 100%; padding: 9px 0; font-size: 13px; font-weight: 700;
+                   border-radius: 8px; width: 100%; padding: 10px 0; font-size: 14px; font-weight: 700;
                    cursor: pointer; letter-spacing: .5px; transition: opacity .2s;
                    display: block; text-align: center; text-decoration: none; }
-        .btn-buy:hover { opacity: .85; color: #fff; text-decoration: none; }
+        .btn-buy:hover { opacity: .87; color: #fff; text-decoration: none; }
         .btn-buy.disabled { background: #c8c8c8; cursor: not-allowed; pointer-events: none; }
+        .empty-tip { border: 1px dashed #e5e5e5; border-radius: 10px; padding: 70px 10px; text-align: center;
+                     color: #999; font-size: 14px; background: #fff; }
         .ai-float { position: fixed; bottom: 36px; right: 28px; z-index: 999;
                     background: linear-gradient(135deg,#4a90e2,#7b68ee); color: #fff;
                     border-radius: 50px; padding: 12px 20px; text-decoration: none;
@@ -59,38 +72,59 @@
 </head>
 <body>
 <div class="topbar">
-    <a class="brand" href="/goods/list">⚡ 闪惠<span class="accent">智购</span>商城</a>
-    <div style="display:flex;align-items:center;gap:18px">
-        <a href="/user.htm" style="color:rgba(255,255,255,.72);font-size:13px;text-decoration:none">个人中心</a>
-        <a href="/order_list.htm" style="color:rgba(255,255,255,.72);font-size:13px;text-decoration:none">我的订单</a>
-        <a href="/address.htm" style="color:rgba(255,255,255,.72);font-size:13px;text-decoration:none">地址管理</a>
-        <a href="/merchant.htm" style="color:rgba(255,255,255,.72);font-size:13px;text-decoration:none">商家中心</a>
-        <span class="nav-tip">限时抢购平台</span>
+    <div class="topbar-inner">
+        <a class="brand" href="/goods/list">⚡ 闪惠<span class="accent">智购</span>商城</a>
+        <div class="topnav">
+            <a href="/goods/list" class="active">商城首页</a>
+            <a href="/user.htm">个人中心</a>
+            <a href="/order_list.htm">我的订单</a>
+            <a href="/address.htm">地址管理</a>
+            <a href="/merchant.htm">商家中心</a>
+        </div>
+        <div class="topbar-tip">限时抢购平台</div>
     </div>
 </div>
+
 <div class="hero">
-    <div class="live-badge">🔴 限时特卖 LIVE</div>
-    <h1>⚡ 限时秒杀</h1>
-    <p class="sub">手慢无货 · 超低折扣 · 正品保障</p>
+    <div class="hero-inner">
+        <div>
+            <div class="live-badge">🔴 限时特卖 LIVE</div>
+            <h1>⚡ 限时秒杀</h1>
+            <p class="sub">手慢无货 · 超低折扣 · 正品保障</p>
+        </div>
+        <div class="watermark">⚡</div>
+    </div>
 </div>
-<div class="container py-4">
-    <div class="section-title">🔥 今日秒杀商品</div>
-    <div class="row">
-        <div th:each="goods : ${goodsList}" class="col-6 col-md-4 col-lg-3 mb-4">
-            <div class="goods-card">
-                <div class="goods-thumb"><img th:if="${goods.goodsImg != null and !#strings.isEmpty(goods.goodsImg)}" th:src="${goods.goodsImg}" alt="商品图片"/><span th:unless="${goods.goodsImg != null and !#strings.isEmpty(goods.goodsImg)}">🛍️</span></div>
-                <div class="goods-body">
-                    <div class="goods-name" th:text="${goods.goodsName}">商品名称</div>
+
+<div class="pc-container">
+    <div class="section-head">
+        <div class="section-title">🔥 今日秒杀商品</div>
+        <div class="section-count">共 <b th:text="${#lists.size(goodsList)}">0</b> 件好物</div>
+    </div>
+
+    <div class="empty-tip" th:if="${#lists.isEmpty(goodsList)}">暂无秒杀活动，敬请期待</div>
+
+    <div class="layui-row layui-col-space20">
+        <div th:each="goods : ${goodsList}" class="layui-col-xs3">
+            <div class="gcard">
+                <a class="gthumb" th:href="'/goods_detail.htm?goodsId='+${goods.id}">
+                    <img th:if="${goods.goodsImg != null and !#strings.isEmpty(goods.goodsImg)}" th:src="${goods.goodsImg}" alt="商品图片"/>
+                    <span th:unless="${goods.goodsImg != null and !#strings.isEmpty(goods.goodsImg)}">🛍️</span>
+                </a>
+                <div class="gbody">
+                    <a class="gname" th:href="'/goods_detail.htm?goodsId='+${goods.id}" th:text="${goods.goodsName}">商品名称</a>
                     <div class="price-row">
                         <span class="price-seckill" th:text="${goods.seckillPrice}">0</span>
                         <span class="price-origin"  th:text="${goods.goodsPrice}">0</span>
                     </div>
-                    <span class="activity-tag" th:classappend="${goods.activityStatus == 0} ? ' waiting' : (${goods.activityStatus == 2 or goods.soldOut} ? ' ended' : '')"
+                    <span class="act-tag" th:classappend="${goods.activityStatus == 0} ? ' waiting' : (${goods.activityStatus == 2 or goods.soldOut} ? ' ended' : '')"
                           th:text="${goods.soldOut} ? '已售罄' : (${goods.activityStatus == 0} ? '即将开始' : (${goods.activityStatus == 2} ? '活动已结束' : '正在进行'))">活动状态</span>
                     <div class="stock-bar">
                         <div class="stock-fill" th:style="'width:' + (${goods.stockCount} > 100 ? 80 : (${goods.stockCount} > 0 ? ${goods.stockCount} : 5)) + '%'"></div>
                     </div>
-                    <div class="stock-tip">仅剩 <span th:text="${goods.stockCount}">0</span> 件</div>
+                    <div class="stock-line">
+                        <span class="stock-tip">仅剩 <span th:text="${goods.stockCount}">0</span> 件</span>
+                    </div>
                     <a th:if="${goods.activityStatus == 1 and !goods.soldOut}" class="btn-buy" th:href="'/goods_detail.htm?goodsId='+${goods.id}">立即抢购 →</a>
                     <span th:unless="${goods.activityStatus == 1 and !goods.soldOut}" class="btn-buy disabled"
                           th:text="${goods.soldOut} ? '已售罄' : (${goods.activityStatus == 0} ? '等待开抢' : '活动结束')">暂不可购</span>

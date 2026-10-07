@@ -2,83 +2,117 @@
 <html>
 <head>
     <meta charset="UTF-8"/>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>闪惠智购商城 — 商品详情</title>
-    <script src="/jquery-validation/lib/jquery-1.11.1.js"></script><script src="/js/csrf.js"></script>
-    <link  rel="stylesheet" href="/bootstrap/css/bootstrap.css"/>
-    <script src="/bootstrap/js/bootstrap.min.js"></script>
+    <script src="/jquery-validation/lib/jquery-1.11.1.js"></script>
+    <script src="/js/csrf.js"></script>
+    <link rel="stylesheet" href="/layui/css/layui.css"/>
     <script src="/layer/layer.js"></script>
     <style>
-        body{background:#f4f4f8;font-family:'PingFang SC','Microsoft YaHei',sans-serif;margin:0;}
-        .topbar{background:linear-gradient(135deg,#1a1a2e,#16213e);padding:14px 24px;
-                display:flex;align-items:center;justify-content:space-between;}
-        .topbar .brand{color:#fff;font-size:18px;font-weight:900;letter-spacing:1px;text-decoration:none;}
-        .topbar .brand .accent{color:#e74c3c;}
-        .topbar a.back{color:rgba(255,255,255,.55);font-size:13px;text-decoration:none;}
-        .topbar a.back:hover{color:#fff;}
-        .wrap{max-width:860px;margin:28px auto;padding:0 16px;}
-        #userTip{display:block;color:#e74c3c;font-size:13px;margin-bottom:12px;
-                 background:#fff5f5;border-radius:8px;padding:10px 14px;}
-        .detail-card{background:#fff;border-radius:14px;box-shadow:0 2px 14px rgba(0,0,0,.08);
-                     overflow:hidden;display:flex;flex-wrap:wrap;}
-        .thumb-col{width:320px;background:linear-gradient(135deg,#f5f5f5,#ececec);
-                   display:flex;align-items:center;justify-content:center;
-                   font-size:96px;min-height:280px;flex-shrink:0;overflow:hidden;}
-        .thumb-col img{width:100%;height:100%;object-fit:cover;}
-        .info-col{flex:1;padding:28px;min-width:260px;}
-        .goods-title{font-size:20px;font-weight:700;color:#222;margin-bottom:16px;line-height:1.4;}
-        .price-block{background:#fff8f8;border-radius:10px;padding:14px 18px;
-                     margin-bottom:16px;display:flex;align-items:baseline;gap:12px;}
-        .price-seckill{font-size:34px;font-weight:900;color:#e74c3c;}
-        .price-seckill::before{content:'¥';font-size:18px;}
-        .price-origin{font-size:13px;color:#aaa;text-decoration:line-through;}
-        .price-origin::before{content:'原价 ¥';}
-        .meta-row{display:flex;font-size:13px;color:#666;margin-bottom:10px;align-items:center;}
-        .meta-row .lbl{color:#aaa;width:80px;flex-shrink:0;}
-        .countdown-box{background:#1a1a2e;color:#fff;border-radius:10px;
-                       padding:12px 16px;margin-bottom:16px;font-size:14px;min-height:42px;}
-        .vcode-row{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
-        #verifyCodeImg{border-radius:6px;cursor:pointer;height:36px;}
-        #verifyCode{border:1.5px solid #e0e0e0;border-radius:8px;padding:8px 12px;
-                    font-size:14px;width:120px;outline:none;}
-        .btn-seckill{background:linear-gradient(135deg,#e74c3c,#c0392b);color:#fff;border:none;
-                     border-radius:10px;padding:13px 40px;font-size:16px;font-weight:700;
-                     cursor:pointer;letter-spacing:1px;transition:opacity .2s;}
-        .btn-seckill:disabled{opacity:.4;cursor:not-allowed;}
-        .btn-seckill:not(:disabled):hover{opacity:.87;}
-        @media(max-width:640px){.thumb-col{width:100%;min-height:180px;font-size:70px;}
-                                .info-col{padding:18px 14px;}}
+        body { background: #f4f4f8; font-family: 'PingFang SC','Microsoft YaHei',sans-serif; margin: 0; color: #333; min-width: 1200px; }
+        /* ---------- 顶部导航 ---------- */
+        .topbar { background: linear-gradient(135deg,#1a1a2e,#16213e); height: 64px; }
+        .topbar-inner { width: 1200px; margin: 0 auto; height: 100%; display: flex; align-items: center; justify-content: space-between; }
+        .brand { color: #fff; font-size: 20px; font-weight: 900; letter-spacing: 1px; text-decoration: none; }
+        .brand:hover { color: #fff; text-decoration: none; }
+        .accent { color: #e74c3c; }
+        .topnav a { color: rgba(255,255,255,.72); font-size: 14px; text-decoration: none; margin-right: 28px; }
+        .topnav a:hover, .topnav a.active { color: #fff; }
+        /* ---------- 布局 ---------- */
+        .pc-container { width: 1200px; margin: 18px auto 60px; }
+        .crumb { margin-bottom: 16px; font-size: 13px; color: #999; }
+        .crumb a { color: #999; text-decoration: none; }
+        .crumb a:hover { color: #e74c3c; }
+        .crumb .sep { margin: 0 8px; color: #ddd; }
+        .crumb .cur { color: #333; }
+        #userTip { display: block; color: #e74c3c; font-size: 13px; margin-bottom: 14px;
+                   background: #fff5f5; border: 1px solid #ffe0dc; border-radius: 8px; padding: 11px 16px; }
+        #userTip a { color: #e74c3c; font-weight: 600; }
+        /* ---------- 详情卡片 ---------- */
+        .detail-card { background: #fff; border-radius: 12px; box-shadow: 0 2px 14px rgba(0,0,0,.07); overflow: hidden; }
+        .thumb-col { background: linear-gradient(135deg,#f5f5f5,#ececec); display: flex; align-items: center;
+                     justify-content: center; font-size: 110px; min-height: 520px; overflow: hidden; }
+        .thumb-col img { width: 100%; height: 100%; object-fit: cover; }
+        .info-col { padding: 34px 40px 40px 34px; }
+        .goods-title { font-size: 24px; font-weight: 800; color: #222; margin: 0 0 18px; line-height: 1.4; }
+        .price-block { background: #fff8f8; border-radius: 10px; padding: 18px 24px;
+                       margin-bottom: 20px; display: flex; align-items: baseline; gap: 14px; }
+        .price-seckill { font-size: 40px; font-weight: 900; color: #e74c3c; }
+        .price-seckill::before { content: '¥'; font-size: 20px; }
+        .price-origin { font-size: 14px; color: #aaa; text-decoration: line-through; }
+        .price-origin::before { content: '原价 ¥'; }
+        .meta-row { display: flex; font-size: 14px; color: #555; margin-bottom: 14px; align-items: center; }
+        .meta-row .lbl { color: #999; width: 88px; flex-shrink: 0; }
+        #addressSelect { border: 1px solid #dcdfe6; border-radius: 6px; padding: 8px 10px; font-size: 13px;
+                         color: #555; max-width: 460px; outline: none; background: #fff; }
+        #addressSelect:disabled { background: #f7f7f7; color: #aaa; }
+        .addr-manage { margin-left: 10px; color: #e74c3c; font-size: 13px; text-decoration: none; }
+        .addr-manage:hover { color: #c0392b; }
+        .countdown-box { background: #1a1a2e; color: #fff; border-radius: 10px;
+                         padding: 14px 20px; margin-bottom: 18px; font-size: 15px; min-height: 48px;
+                         display: flex; align-items: center; }
+        .countdown-box strong { color: #f39c12; font-size: 20px; }
+        .vcode-row { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+        #verifyCodeImg { border-radius: 6px; cursor: pointer; height: 40px; border: 1px solid #eee; }
+        #verifyCode { border: 1.5px solid #e0e0e0; border-radius: 8px; padding: 9px 12px;
+                      font-size: 14px; width: 130px; outline: none; }
+        #verifyCode:focus { border-color: #e74c3c; }
+        .btn-seckill { background: linear-gradient(135deg,#e74c3c,#c0392b); color: #fff; border: none;
+                       border-radius: 10px; padding: 15px 0; width: 300px; font-size: 17px; font-weight: 700;
+                       cursor: pointer; letter-spacing: 2px; transition: opacity .2s; }
+        .btn-seckill:disabled { opacity: .4; cursor: not-allowed; }
+        .btn-seckill:not(:disabled):hover { opacity: .87; }
     </style>
 </head>
 <body>
 <div class="topbar">
-    <a class="brand" href="/goods/list">⚡ 闪惠<span class="accent">智购</span>商城</a>
-    <div style="display:flex;gap:18px;align-items:center"><a class="back" href="/order_list.htm">我的订单</a><a class="back" href="/goods/list">← 返回列表</a></div>
+    <div class="topbar-inner">
+        <a class="brand" href="/goods/list">⚡ 闪惠<span class="accent">智购</span>商城</a>
+        <div class="topnav">
+            <a href="/goods/list">商城首页</a>
+            <a href="/user.htm">个人中心</a>
+            <a href="/order_list.htm">我的订单</a>
+            <a href="/address.htm">地址管理</a>
+            <a href="/merchant.htm">商家中心</a>
+        </div>
+        <div style="width:120px"></div>
+    </div>
 </div>
-<div class="wrap">
-    <span id="userTip">您还没有登录，请<a id="loginLink" href="/login/index" style="color:#e74c3c;font-weight:600;">点此登录</a>后参与秒杀</span>
+
+<div class="pc-container">
+    <div class="crumb">
+        <a href="/goods/list">首页</a><span class="sep">/</span><a href="/goods/list">商品列表</a><span class="sep">/</span><span class="cur">商品详情</span>
+    </div>
+
+    <span id="userTip">您还没有登录，请<a id="loginLink" href="/login/index">点此登录</a>后参与秒杀</span>
     <input type="hidden" id="goodsId"/>
+
     <div class="detail-card">
-        <div class="thumb-col"><span id="goodsPlaceholder">🛍️</span><img id="goodsImage" style="display:none" alt="商品图片"/></div>
-        <div class="info-col">
-            <div class="goods-title" id="goodsName">加载中...</div>
-            <div class="price-block">
-                <span class="price-seckill" id="seckillPrice">—</span>
-                <span class="price-origin"  id="goodsPrice">—</span>
+        <div class="layui-row">
+            <div class="layui-col-xs5">
+                <div class="thumb-col"><span id="goodsPlaceholder">🛍️</span><img id="goodsImage" style="display:none" alt="商品图片"/></div>
             </div>
-            <div class="meta-row"><span class="lbl">库存</span><span id="stockCount">—</span> 件</div>
-            <div class="meta-row"><span class="lbl">开抢时间</span><span id="startTime">—</span></div>
-            <div class="meta-row"><span class="lbl">收货地址</span>
-                <select id="addressSelect" disabled><option value="">请先登录并设置地址</option></select>
-                <a href="/address.htm" style="margin-left:8px;color:#e74c3c;font-size:12px;">管理</a>
+            <div class="layui-col-xs7">
+                <div class="info-col">
+                    <h1 class="goods-title" id="goodsName">加载中...</h1>
+                    <div class="price-block">
+                        <span class="price-seckill" id="seckillPrice">—</span>
+                        <span class="price-origin"  id="goodsPrice">—</span>
+                    </div>
+                    <div class="meta-row"><span class="lbl">库存</span><span id="stockCount">—</span>&nbsp;件</div>
+                    <div class="meta-row"><span class="lbl">开抢时间</span><span id="startTime">—</span></div>
+                    <div class="meta-row"><span class="lbl">收货地址</span>
+                        <select id="addressSelect" disabled><option value="">请先登录并设置地址</option></select>
+                        <a class="addr-manage" href="/address.htm">管理</a>
+                    </div>
+                    <div id="seckillTip" class="countdown-box">加载中...</div>
+                    <input type="hidden" id="remainingSeconds"/>
+                    <div class="vcode-row">
+                        <img id="verifyCodeImg" style="display:none" onclick="refreshVCode()"/>
+                        <input id="verifyCode" placeholder="请输入图片中的数字验证码" style="display:none"/>
+                    </div>
+                    <button class="btn-seckill" type="button" id="buyButton" onclick="getSeckillPath()">⚡ 立即秒杀</button>
+                </div>
             </div>
-            <div id="seckillTip" class="countdown-box">加载中...</div>
-            <input type="hidden" id="remainingSeconds"/>
-            <div class="vcode-row">
-                <img id="verifyCodeImg" style="display:none" onclick="refreshVCode()"/>
-                <input id="verifyCode" placeholder="验证码" style="display:none"/>
-            </div>
-            <button class="btn-seckill" type="button" id="buyButton" onclick="getSeckillPath()">⚡ 立即秒杀</button>
         </div>
     </div>
 </div>
@@ -199,13 +233,21 @@
         });
     }
 
+    function fmtDateTime(v) {
+        if (!v) { return "—"; }
+        var d = new Date(v);
+        if (isNaN(d.getTime())) { return v; }
+        function p(n) { return (n < 10 ? '0' : '') + n; }
+        return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+    }
+
     function render(detail) {
         var goods = detail && detail.goodsVo;
         if (!goods || !goods.id) { layer.msg("商品信息不存在"); return; }
         if (detail.user != null) { $("#userTip").hide(); }
         $("#goodsName").text(goods.goodsName || "—");
         if (goods.goodsImg) { $("#goodsImage").attr("src", goods.goodsImg).show(); $("#goodsPlaceholder").hide(); }
-        $("#startTime").text(goods.startDate || "—");
+        $("#startTime").text(fmtDateTime(goods.startDate));
         $("#remainingSeconds").val(detail.remainingSeconds);
         $("#goodsId").val(goods.id);
         $("#goodsPrice").text(goods.goodsPrice);

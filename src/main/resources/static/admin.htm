@@ -2,56 +2,158 @@
 <html>
 <head>
     <meta charset="UTF-8"/>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <title>管理员控制台</title>
-    <script src="/jquery-validation/lib/jquery-1.11.1.js"></script><script src="/js/csrf.js"></script>
+    <title>管理员控制台 - 闪惠智购商城</title>
+    <script src="/jquery-validation/lib/jquery-1.11.1.js"></script>
+    <script src="/js/csrf.js"></script>
     <script src="/js/md5.min.js"></script>
+    <link rel="stylesheet" href="/layui/css/layui.css"/>
+    <script src="/layui/layui.js"></script>
     <style>
-        body{margin:0;background:#f4f4f8;color:#222;font-family:'Microsoft YaHei',sans-serif}.bar{background:#1a1a2e;color:#fff;padding:16px 24px}
-        .wrap{max-width:1100px;margin:24px auto;padding:0 16px}.panel{background:#fff;border-radius:8px;padding:18px;margin-bottom:16px}
-        h2{font-size:18px;margin:0 0 16px}.login{max-width:420px;margin:60px auto}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-        input,textarea{box-sizing:border-box;width:100%;padding:9px;border:1px solid #ddd;border-radius:4px}textarea{min-height:70px}.wide{grid-column:1/-1}
-        button{border:0;border-radius:4px;padding:9px 14px;cursor:pointer}.primary{background:#e74c3c;color:#fff}.danger{background:#fbe9e7;color:#c0392b}
-        table{border-collapse:collapse;width:100%;font-size:13px}th,td{border-bottom:1px solid #eee;text-align:left;padding:9px 6px}th{color:#888;font-weight:normal}.muted{color:#888;font-size:12px}
-        @media(max-width:700px){.grid{grid-template-columns:1fr}.wide{grid-column:auto}table{display:block;overflow:auto;white-space:nowrap}}
+        body { margin: 0; background: #f4f4f8; color: #333; font-family: 'PingFang SC','Microsoft YaHei',sans-serif; min-width: 1200px; }
+        /* ---------- 顶部导航 ---------- */
+        .topbar { background: linear-gradient(135deg,#1a1a2e,#16213e); height: 64px; }
+        .topbar-inner { width: 1200px; margin: 0 auto; height: 100%; display: flex; align-items: center; justify-content: space-between; }
+        .brand { color: #fff; font-size: 19px; font-weight: 900; letter-spacing: 1px; text-decoration: none; }
+        .brand .accent { color: #e74c3c; }
+        .brand .tag { font-size: 12px; font-weight: 400; color: rgba(255,255,255,.55); margin-left: 12px; }
+        .btn-logout { background: transparent; border: 1px solid rgba(255,255,255,.4); color: rgba(255,255,255,.85);
+                      border-radius: 4px; padding: 5px 14px; font-size: 13px; cursor: pointer; }
+        .btn-logout:hover { border-color: #fff; color: #fff; }
+        /* ---------- 品牌色覆盖（layui 默认主色 -> 站点红） ---------- */
+        .layui-btn { background-color: #e74c3c; }
+        .layui-btn:hover { background-color: #d0392a; color: #fff; }
+        .layui-btn-primary { background-color: #fff; border-color: #d2d2d2; color: #555; }
+        .layui-btn-primary:hover { background-color: #fff; border-color: #e74c3c; color: #e74c3c; }
+        .layui-btn.btn-danger { background-color: #fbe9e7; color: #c0392b; }
+        .layui-btn.btn-danger:hover { background-color: #f8ddd9; color: #c0392b; }
+        .layui-layer-btn .layui-layer-btn0 { background-color: #e74c3c !important; border-color: #e74c3c !important; }
+        /* ---------- 布局 ---------- */
+        .pc-container { width: 1200px; margin: 26px auto 70px; }
+        /* ---------- 登录卡片 ---------- */
+        .login-card { width: 420px; margin: 60px auto; background: #fff; border-radius: 12px;
+                      box-shadow: 0 4px 24px rgba(0,0,0,.08); padding: 38px 40px 30px; }
+        .login-card h2 { font-size: 20px; margin: 0 0 6px; text-align: center; font-weight: 800; }
+        .login-card .desc { color: #999; font-size: 13px; text-align: center; margin: 0 0 26px; }
+        .login-card .layui-input { margin-bottom: 16px; }
+        .login-card .layui-btn { width: 100%; }
+        .login-error { display: block; color: #e74c3c; font-size: 13px; margin-top: 12px; text-align: center; min-height: 18px; }
+        /* ---------- 控制台 ---------- */
+        .tab-card { background: #fff; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,.05); padding: 0 28px 28px; }
+        .layui-tab-brief > .layui-tab-title { border-bottom: 1px solid #f0f0f0; }
+        .layui-tab-brief > .layui-tab-title .layui-this { color: #e74c3c; font-weight: 700; }
+        .layui-tab-brief > .layui-tab-title .layui-this:after { border-bottom: 2px solid #e74c3c; }
+        .layui-tab-title li { font-size: 15px; }
+        .panel-sec { padding-top: 22px; }
+        .panel-sec h3 { font-size: 16px; margin: 0 0 16px; font-weight: 800; }
+        .panel-sec h3 .hint { font-size: 12px; color: #999; font-weight: 400; margin-left: 10px; }
+        .f-label { font-size: 13px; color: #666; margin: 4px 0 6px; }
+        .layui-input, .layui-textarea { font-size: 13px; }
+        .layui-table { margin: 16px 0 0; }
+        .layui-table th { font-weight: 700; color: #555; background: #fafafa; }
+        .layui-table td, .layui-table th { font-size: 13px; }
+        .layui-btn-xs { margin: 1px 4px 1px 0; }
+        .muted { color: #999; font-size: 12px; }
     </style>
 </head>
 <body>
-<div class="bar">闪惠智购 · 管理控制台 <button id="logout" style="float:right;display:none">退出</button></div>
-<div class="wrap">
-    <section class="panel login" id="loginPanel"><h2>管理员登录</h2><input id="username" placeholder="用户名"/><br/><br/><input id="password" type="password" placeholder="密码"/><br/><br/><button class="primary" id="loginButton">登录</button><span id="loginError" class="muted"></span></section>
+<div class="topbar">
+    <div class="topbar-inner">
+        <a class="brand" href="/admin.htm">⚡ 闪惠<span class="accent">智购</span><span class="tag">管理控制台</span></a>
+        <button class="btn-logout" id="logout" style="display:none">退出登录</button>
+    </div>
+</div>
+
+<div class="pc-container">
+    <section class="login-card" id="loginPanel">
+        <h2>管理员登录</h2>
+        <p class="desc">仅限平台管理员访问</p>
+        <input id="username" class="layui-input" placeholder="用户名"/>
+        <input id="password" class="layui-input" type="password" placeholder="密码"/>
+        <button class="layui-btn" id="loginButton">登 录</button>
+        <span id="loginError" class="login-error"></span>
+    </section>
+
     <div id="console" style="display:none">
-        <section class="panel"><h2>商品与秒杀活动</h2><form id="goodsForm"><input type="hidden" id="goodsId"/><div class="grid"><input id="goodsName" placeholder="商品名称" required/><input id="goodsTitle" placeholder="商品标题" required/><input id="goodsImg" placeholder="图片路径"/><input id="goodsPrice" type="number" step="0.01" placeholder="原价" required/><input id="seckillPrice" type="number" step="0.01" placeholder="秒杀价" required/><input id="stockCount" type="number" min="0" placeholder="库存" required/><input id="startDate" type="datetime-local" required/><input id="endDate" type="datetime-local" required/><textarea id="goodsDetail" class="wide" placeholder="商品详情"></textarea></div><br/><button class="primary" type="submit">保存</button> <button type="button" onclick="resetGoods()">清空</button></form><div id="goodsTable" style="margin-top:18px"></div></section>
-        <section class="panel"><h2>订单履约</h2><div id="orderTable"></div></section>
-        <section class="panel"><h2>店铺审核</h2><div id="shopTable"></div></section>
-        <section class="panel"><h2>用户</h2><div id="userTable"></div></section>
+        <div class="layui-tab layui-tab-brief tab-card" lay-filter="adminTab">
+            <ul class="layui-tab-title">
+                <li class="layui-this">商品与秒杀活动</li>
+                <li>订单履约</li>
+                <li>店铺审核</li>
+                <li>用户</li>
+            </ul>
+            <div class="layui-tab-content">
+                <div class="layui-tab-item layui-show">
+                    <section class="panel-sec">
+                        <h3>商品与秒杀活动 <span class="hint">新增 / 编辑 / 补货 / 删除</span></h3>
+                        <form id="goodsForm" class="layui-form">
+                            <input type="hidden" id="goodsId"/>
+                            <div class="layui-row layui-col-space10">
+                                <div class="layui-col-xs4"><div class="f-label">商品名称</div><input id="goodsName" class="layui-input" placeholder="商品名称" required/></div>
+                                <div class="layui-col-xs4"><div class="f-label">商品标题</div><input id="goodsTitle" class="layui-input" placeholder="商品标题" required/></div>
+                                <div class="layui-col-xs4"><div class="f-label">图片路径</div><input id="goodsImg" class="layui-input" placeholder="如 /img/goods/xxx.jpg"/></div>
+                                <div class="layui-col-xs4"><div class="f-label">原价</div><input id="goodsPrice" class="layui-input" type="number" step="0.01" placeholder="原价" required/></div>
+                                <div class="layui-col-xs4"><div class="f-label">秒杀价</div><input id="seckillPrice" class="layui-input" type="number" step="0.01" placeholder="秒杀价" required/></div>
+                                <div class="layui-col-xs4"><div class="f-label">库存</div><input id="stockCount" class="layui-input" type="number" min="0" placeholder="库存" required/></div>
+                                <div class="layui-col-xs4"><div class="f-label">开始时间</div><input id="startDate" class="layui-input" type="datetime-local" required/></div>
+                                <div class="layui-col-xs4"><div class="f-label">结束时间</div><input id="endDate" class="layui-input" type="datetime-local" required/></div>
+                                <div class="layui-col-xs12"><div class="f-label">商品详情</div><textarea id="goodsDetail" class="layui-textarea" placeholder="商品详情"></textarea></div>
+                            </div>
+                            <div style="margin-top:18px">
+                                <button class="layui-btn" type="submit">保 存</button>
+                                <button type="button" class="layui-btn layui-btn-primary" onclick="resetGoods()">清 空</button>
+                            </div>
+                        </form>
+                        <div id="goodsTable"></div>
+                    </section>
+                </div>
+                <div class="layui-tab-item">
+                    <section class="panel-sec">
+                        <h3>订单履约 <span class="hint">发货 / 退款审核</span></h3>
+                        <div id="orderTable"></div>
+                    </section>
+                </div>
+                <div class="layui-tab-item">
+                    <section class="panel-sec">
+                        <h3>店铺审核 <span class="hint">商家入驻审批</span></h3>
+                        <div id="shopTable"></div>
+                    </section>
+                </div>
+                <div class="layui-tab-item">
+                    <section class="panel-sec">
+                        <h3>用户</h3>
+                        <div id="userTable"></div>
+                    </section>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 <script>
 var token=localStorage.getItem('adminToken');
 function authHeaders(){return {'X-Admin-Token':token};}
-function fail(data){ if(data&&Number(data.code)===500220){localStorage.removeItem('adminToken');token=null;showLogin();} else alert((data&&data.msg)||'请求失败'); }
+function fail(data){ if(data&&Number(data.code)===500220){localStorage.removeItem('adminToken');token=null;showLogin();} else layer.msg((data&&data.msg)||'请求失败'); }
 function showLogin(){$('#loginPanel').show();$('#console,#logout').hide();}
 function showConsole(){$('#loginPanel').hide();$('#console,#logout').show();loadGoods();loadOrders();loadShops();loadUsers();}
 function login(){var raw=$('#password').val(),salt='1a2b3c4d';var form=md5(salt[0]+salt[2]+raw+salt[5]+salt[4]);$.post('/admin/auth/login',{username:$.trim($('#username').val()),password:form},function(data){if(data&&Number(data.code)===0){token=data.data;localStorage.setItem('adminToken',token);showConsole();}else{$('#loginError').text((data&&data.msg)||'登录失败');}});}
 function dateValue(id){return $('#'+id).val().replace('T',' ')+':00';}
 function toLocalInput(v){var d=new Date(v);if(isNaN(d.getTime()))return '';function p(n){return(n<10?'0':'')+n;}return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes());}
 function payload(){return {goodsId:$('#goodsId').val()||null,goodsName:$.trim($('#goodsName').val()),goodsTitle:$.trim($('#goodsTitle').val()),goodsImg:$('#goodsImg').val(),goodsDetail:$('#goodsDetail').val(),goodsPrice:$('#goodsPrice').val(),seckillPrice:$('#seckillPrice').val(),stockCount:$('#stockCount').val(),startDate:dateValue('startDate'),endDate:dateValue('endDate')};}
-function loadGoods(){$.ajax({url:'/admin/goods/list',headers:authHeaders(),success:function(data){if(!data||Number(data.code)!==0){fail(data);return;}var html='<table><tr><th>ID</th><th>商品</th><th>店铺</th><th>秒杀价</th><th>库存</th><th>时间</th><th></th></tr>';$.each(data.data,function(_,g){html+='<tr><td>'+g.id+'</td><td>'+escapeHtml(g.goodsName)+'</td><td>'+(g.shopName?escapeHtml(g.shopName):'自营')+'</td><td>'+g.seckillPrice+'</td><td>'+g.stockCount+'</td><td>'+g.startDate+' ~ '+g.endDate+'</td><td><button onclick="editGoods('+g.id+')">编辑</button> <button onclick="restockGoods('+g.id+')">补货</button> <button class="danger" onclick="deleteGoods('+g.id+')">删除</button></td></tr>';});$('#goodsTable').html(html+'</table>');}});}
+function loadGoods(){$.ajax({url:'/admin/goods/list',headers:authHeaders(),success:function(data){if(!data||Number(data.code)!==0){fail(data);return;}var html='<table class="layui-table"><tr><th>ID</th><th>商品</th><th>店铺</th><th>秒杀价</th><th>库存</th><th>时间</th><th>操作</th></tr>';$.each(data.data,function(_,g){html+='<tr><td>'+g.id+'</td><td>'+escapeHtml(g.goodsName)+'</td><td>'+(g.shopName?escapeHtml(g.shopName):'自营')+'</td><td>'+g.seckillPrice+'</td><td>'+g.stockCount+'</td><td>'+g.startDate+' ~ '+g.endDate+'</td><td><button class="layui-btn layui-btn-xs layui-btn-primary" onclick="editGoods('+g.id+')">编辑</button> <button class="layui-btn layui-btn-xs layui-btn-primary" onclick="restockGoods('+g.id+')">补货</button> <button class="layui-btn layui-btn-xs btn-danger" onclick="deleteGoods('+g.id+')">删除</button></td></tr>';});$('#goodsTable').html(html+'</table>');}});}
 function editGoods(id){$.ajax({url:'/admin/goods/list',headers:authHeaders(),success:function(data){var g=$.grep(data.data,function(x){return Number(x.id)===Number(id);})[0];if(g){$('#goodsId').val(g.id);$('#goodsName').val(g.goodsName);$('#goodsTitle').val(g.goodsTitle);$('#goodsImg').val(g.goodsImg);$('#goodsDetail').val(g.goodsDetail);$('#goodsPrice').val(g.goodsPrice);$('#seckillPrice').val(g.seckillPrice);$('#stockCount').val(g.stockCount);$('#startDate').val(toLocalInput(g.startDate));$('#endDate').val(toLocalInput(g.endDate));window.scrollTo(0,0);}}});}
 function resetGoods(){$('#goodsForm')[0].reset();$('#goodsId').val('');}
-function deleteGoods(id){if(!confirm('确认删除商品？'))return;$.ajax({url:'/admin/goods/delete',type:'POST',headers:authHeaders(),data:{goodsId:id},success:function(data){if(data&&Number(data.code)===0)loadGoods();else fail(data);}});}
-function restockGoods(id){var count=window.prompt('请输入补货数量（正整数）','10');if(count===null)return;count=parseInt(count,10);if(!Number.isInteger(count)||count<=0){alert('补货数量必须大于0');return;}$.ajax({url:'/admin/goods/restock',type:'POST',headers:authHeaders(),data:{goodsId:id,count:count},success:function(data){if(data&&Number(data.code)===0)loadGoods();else fail(data);}});}
-function loadOrders(){$.ajax({url:'/admin/orders/list',headers:authHeaders(),success:function(data){if(!data||Number(data.code)!==0){fail(data);return;}var html='<table><tr><th>订单</th><th>用户</th><th>商品</th><th>金额</th><th>状态</th><th>物流</th><th>售后</th><th></th></tr>';$.each(data.data,function(_,o){var logistics=o.trackingNumber?escapeHtml((o.shippingCompany||'')+' '+o.trackingNumber):'-';var refund=o.refundRequestDate?'原因：'+escapeHtml(o.refundReason||'-')+'<br/>申请：'+escapeHtml(o.refundRequestDate):'-';var action=Number(o.orderStatus)===1?'<button onclick="ship('+o.id+')">发货</button>':'';if(o.refundRequestDate&&Number(o.orderStatus)!==6)action+='<button onclick="approveRefund('+o.id+')">同意退款</button>';html+='<tr><td>'+o.id+'</td><td>'+o.userId+'</td><td>'+escapeHtml(o.goodsName||'')+'</td><td>'+o.goodsPrice+'</td><td>'+status(o.orderStatus)+'</td><td>'+logistics+'</td><td>'+refund+'</td><td>'+action+'</td></tr>';});$('#orderTable').html(html+'</table>');}});}
-function loadUsers(){$.ajax({url:'/admin/users/list',headers:authHeaders(),success:function(data){if(!data||Number(data.code)!==0){fail(data);return;}var html='<table><tr><th>ID</th><th>昵称</th><th>注册时间</th><th>登录次数</th></tr>';$.each(data.data,function(_,u){html+='<tr><td>'+u.id+'</td><td>'+escapeHtml(u.nickname)+'</td><td>'+u.registerDate+'</td><td>'+u.loginCount+'</td></tr>';});$('#userTable').html(html+'</table>');}});}
+function deleteGoods(id){layer.confirm('确认删除商品？',{title:'删除确认'},function(index){layer.close(index);$.ajax({url:'/admin/goods/delete',type:'POST',headers:authHeaders(),data:{goodsId:id},success:function(data){if(data&&Number(data.code)===0)loadGoods();else fail(data);}});});}
+function restockGoods(id){layer.prompt({title:'请输入补货数量（正整数）',value:'10'},function(value,index){layer.close(index);var count=parseInt(value,10);if(!Number.isInteger(count)||count<=0){layer.msg('补货数量必须大于0');return;}$.ajax({url:'/admin/goods/restock',type:'POST',headers:authHeaders(),data:{goodsId:id,count:count},success:function(data){if(data&&Number(data.code)===0)loadGoods();else fail(data);}});});}
+function loadOrders(){$.ajax({url:'/admin/orders/list',headers:authHeaders(),success:function(data){if(!data||Number(data.code)!==0){fail(data);return;}var html='<table class="layui-table"><tr><th>订单</th><th>用户</th><th>商品</th><th>金额</th><th>状态</th><th>物流</th><th>售后</th><th>操作</th></tr>';$.each(data.data,function(_,o){var logistics=o.trackingNumber?escapeHtml((o.shippingCompany||'')+' '+o.trackingNumber):'-';var refund=o.refundRequestDate?'原因：'+escapeHtml(o.refundReason||'-')+'<br/>申请：'+escapeHtml(o.refundRequestDate):'-';var action=Number(o.orderStatus)===1?'<button class="layui-btn layui-btn-xs" onclick="ship('+o.id+')">发货</button>':'';if(o.refundRequestDate&&Number(o.orderStatus)!==6)action+='<button class="layui-btn layui-btn-xs btn-danger" onclick="approveRefund('+o.id+')">同意退款</button>';html+='<tr><td>'+o.id+'</td><td>'+o.userId+'</td><td>'+escapeHtml(o.goodsName||'')+'</td><td>'+o.goodsPrice+'</td><td>'+status(o.orderStatus)+'</td><td>'+logistics+'</td><td>'+refund+'</td><td>'+action+'</td></tr>';});$('#orderTable').html(html+'</table>');}});}
+function loadUsers(){$.ajax({url:'/admin/users/list',headers:authHeaders(),success:function(data){if(!data||Number(data.code)!==0){fail(data);return;}var html='<table class="layui-table"><tr><th>ID</th><th>昵称</th><th>注册时间</th><th>登录次数</th></tr>';$.each(data.data,function(_,u){html+='<tr><td>'+u.id+'</td><td>'+escapeHtml(u.nickname)+'</td><td>'+u.registerDate+'</td><td>'+u.loginCount+'</td></tr>';});$('#userTable').html(html+'</table>');}});}
 function shopStatus(v){return ['待审核','营业中','已停用'][Number(v)]||'未知';}
-function loadShops(){$.ajax({url:'/admin/shops/list',headers:authHeaders(),success:function(data){if(!data||Number(data.code)!==0){fail(data);return;}var html='<table><tr><th>ID</th><th>店铺</th><th>店主ID</th><th>状态</th><th>申请时间</th><th></th></tr>';$.each(data.data,function(_,s){var action=Number(s.status)===0?'<button onclick="reviewShop('+s.id+',1)">通过</button> <button class="danger" onclick="reviewShop('+s.id+',2)">拒绝</button>':(Number(s.status)===1?'<button class="danger" onclick="reviewShop('+s.id+',2)">停用</button>':'<button onclick="reviewShop('+s.id+',1)">启用</button>');html+='<tr><td>'+s.id+'</td><td>'+escapeHtml(s.name)+'</td><td>'+s.ownerUserId+'</td><td>'+shopStatus(s.status)+'</td><td>'+(s.createTime||'')+'</td><td>'+action+'</td></tr>';});$('#shopTable').html(html+'</table>');}});}
-function reviewShop(id,status){if(!confirm(status===1?'确认通过/启用该店铺？':'确认停用该店铺？'))return;$.ajax({url:'/admin/shops/review',type:'POST',headers:authHeaders(),data:{shopId:id,status:status},success:function(data){if(data&&Number(data.code)===0)loadShops();else fail(data);}});}
-function ship(id){var shippingCompany=window.prompt('请输入物流公司','顺丰速运');if(shippingCompany===null)return;shippingCompany=$.trim(shippingCompany);var trackingNumber=window.prompt('请输入物流单号');if(trackingNumber===null)return;trackingNumber=$.trim(trackingNumber);if(!shippingCompany||!trackingNumber){alert('物流公司和物流单号不能为空');return;}$.ajax({url:'/admin/orders/ship',type:'POST',headers:authHeaders(),data:{orderId:id,shippingCompany:shippingCompany,trackingNumber:trackingNumber},success:function(data){if(data&&Number(data.code)===0)loadOrders();else fail(data);}});}
-function approveRefund(id){if(!confirm('确认同意退款？演示环境将直接标记为已退款。'))return;$.ajax({url:'/admin/orders/refund/approve',type:'POST',headers:authHeaders(),data:{orderId:id},success:function(data){if(data&&Number(data.code)===0)loadOrders();else fail(data);}});}
+function loadShops(){$.ajax({url:'/admin/shops/list',headers:authHeaders(),success:function(data){if(!data||Number(data.code)!==0){fail(data);return;}var html='<table class="layui-table"><tr><th>ID</th><th>店铺</th><th>店主ID</th><th>状态</th><th>申请时间</th><th>操作</th></tr>';$.each(data.data,function(_,s){var action=Number(s.status)===0?'<button class="layui-btn layui-btn-xs" onclick="reviewShop('+s.id+',1)">通过</button> <button class="layui-btn layui-btn-xs btn-danger" onclick="reviewShop('+s.id+',2)">拒绝</button>':(Number(s.status)===1?'<button class="layui-btn layui-btn-xs btn-danger" onclick="reviewShop('+s.id+',2)">停用</button>':'<button class="layui-btn layui-btn-xs" onclick="reviewShop('+s.id+',1)">启用</button>');html+='<tr><td>'+s.id+'</td><td>'+escapeHtml(s.name)+'</td><td>'+s.ownerUserId+'</td><td>'+shopStatus(s.status)+'</td><td>'+(s.createTime||'')+'</td><td>'+action+'</td></tr>';});$('#shopTable').html(html+'</table>');}});}
+function reviewShop(id,status){layer.confirm(status===1?'确认通过/启用该店铺？':'确认停用该店铺？',{title:'店铺审核'},function(index){layer.close(index);$.ajax({url:'/admin/shops/review',type:'POST',headers:authHeaders(),data:{shopId:id,status:status},success:function(data){if(data&&Number(data.code)===0)loadShops();else fail(data);}});});}
+function ship(id){layer.prompt({title:'请输入物流公司',value:'顺丰速运'},function(sc,index){layer.close(index);var shippingCompany=$.trim(sc);layer.prompt({title:'请输入物流单号',value:''},function(tn,index2){layer.close(index2);var trackingNumber=$.trim(tn);if(!shippingCompany||!trackingNumber){layer.msg('物流公司和物流单号不能为空');return;}$.ajax({url:'/admin/orders/ship',type:'POST',headers:authHeaders(),data:{orderId:id,shippingCompany:shippingCompany,trackingNumber:trackingNumber},success:function(data){if(data&&Number(data.code)===0)loadOrders();else fail(data);}});});});}
+function approveRefund(id){layer.confirm('确认同意退款？演示环境将直接标记为已退款。',{title:'退款审核'},function(index){layer.close(index);$.ajax({url:'/admin/orders/refund/approve',type:'POST',headers:authHeaders(),data:{orderId:id},success:function(data){if(data&&Number(data.code)===0)loadOrders();else fail(data);}});});}
 function status(v){return ['待支付','待发货','已发货','已收货','已关闭','已完成','已退款'][Number(v)]||'未知';}
 function escapeHtml(v){return $('<div>').text(v==null?'':v).html();}
-$('#loginButton').on('click',login);$('#logout').on('click',function(){ $.ajax({url:'/admin/auth/logout',headers:authHeaders(),success:function(){localStorage.removeItem('adminToken');token=null;showLogin();}});});$('#goodsForm').on('submit',function(e){e.preventDefault();$.ajax({url:'/admin/goods/save',type:'POST',headers:authHeaders(),data:payload(),success:function(data){if(data&&Number(data.code)===0){resetGoods();loadGoods();}else fail(data);}});});if(token)showConsole();else showLogin();
+var layer=null;layui.use(['element','layer'],function(){layer=layui.layer;});
+$('#loginButton').on('click',login);$('#logout').on('click',function(){ $.ajax({url:'/admin/auth/logout',headers:authHeaders(),success:function(){localStorage.removeItem('adminToken');token=null;showLogin();}});});$('#goodsForm').on('submit',function(e){e.preventDefault();$.ajax({url:'/admin/goods/save',type:'POST',headers:authHeaders(),data:payload(),success:function(data){if(data&&Number(data.code)===0){resetGoods();loadGoods();layer.msg('已保存',{icon:1,time:800});}else fail(data);}});});if(token)showConsole();else showLogin();
 </script>
 </body>
 </html>
