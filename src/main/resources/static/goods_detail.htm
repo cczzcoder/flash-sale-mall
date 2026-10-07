@@ -56,7 +56,7 @@
     <div style="display:flex;gap:18px;align-items:center"><a class="back" href="/order_list.htm">我的订单</a><a class="back" href="/goods/list">← 返回列表</a></div>
 </div>
 <div class="wrap">
-    <span id="userTip">您还没有登录，请<a href="/login/index" style="color:#e74c3c;font-weight:600;">点此登录</a>后参与秒杀</span>
+    <span id="userTip">您还没有登录，请<a id="loginLink" href="/login/index" style="color:#e74c3c;font-weight:600;">点此登录</a>后参与秒杀</span>
     <input type="hidden" id="goodsId"/>
     <div class="detail-card">
         <div class="thumb-col"><span id="goodsPlaceholder">🛍️</span><img id="goodsImage" style="display:none" alt="商品图片"/></div>
@@ -90,7 +90,10 @@
     var addressReady = false;
     var soldOut = false;
 
-    $(function () { getDetail(); });
+    $(function () {
+        $("#loginLink").attr("href", "/login/index?redirect=" + encodeURIComponent(window.location.pathname + window.location.search));
+        getDetail();
+    });
 
     function getGoodsIdFromUrl() {
         var value;

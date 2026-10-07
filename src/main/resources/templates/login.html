@@ -59,12 +59,22 @@
                 </div>
                 <button type="submit" class="btn-login">立即登录</button>
             </form>
-            <div style="text-align:center;margin-top:16px;font-size:13px"><a href="/register.htm" style="color:#e74c3c">注册新账号</a></div>
+            <div style="text-align:center;margin-top:16px;font-size:13px"><a href="/register.htm" id="registerLink" style="color:#e74c3c">注册新账号</a></div>
         </div>
     </div>
     <div class="hint">测试账号：15200000000 ~ 15200000997 &nbsp;|&nbsp; 密码：123456</div>
 </div>
 <script type="text/javascript">
+    /** 读取 ?redirect= 并只接受站内相对路径（防开放重定向），不合法时返回 fallback。 */
+    function getSafeRedirect(fallback) {
+        var r = null;
+        try { r = new URLSearchParams(window.location.search).get("redirect"); } catch (e) { }
+        if (r && r.charAt(0) === "/" && r.charAt(1) !== "/"
+            && r.indexOf("\\") === -1 && r.indexOf("://") === -1) {
+            return r;
+        }
+        return fallback;
+    }
     $.validator.setDefaults({
         submitHandler: function () {
             var pass = $("#password").val();
@@ -75,7 +85,7 @@
                 url: "/login/do_login", type: "POST",
                 data: { mobile: $("#phone").val(), password: password },
                 success: function (data) {
-                    if (data.code == 0) { window.location.href = "/goods/list"; }
+                    if (data.code == 0) { window.location.href = getSafeRedirect("/goods/list"); }
                     else { alert(data.msg); }
                 },
                 error: function () { alert("登录失败，请稍后重试"); }
@@ -83,6 +93,10 @@
         }
     });
     $(document).ready(function () {
+        var redirect = getSafeRedirect(null);
+        if (redirect) {
+            $("#registerLink").attr("href", "/register.htm?redirect=" + encodeURIComponent(redirect));
+        }
         $("#signupForm").validate({
             rules: { phone: { required: true }, password: { required: true, minlength: 5 } },
             messages: { phone: "请输入手机号", password: { required: "请输入密码", minlength: "密码至少5位" } },

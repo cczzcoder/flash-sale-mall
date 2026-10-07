@@ -61,7 +61,7 @@
         <div class="thumb-col"><img th:if="${goods.goodsImg != null and !#strings.isEmpty(goods.goodsImg)}" th:src="${goods.goodsImg}" alt="商品图片"/><span th:unless="${goods.goodsImg != null and !#strings.isEmpty(goods.goodsImg)}">🛍️</span></div>
         <div class="info-col">
             <span th:if="${user eq null}" style="color:#e74c3c;font-size:13px;display:block;margin-bottom:12px;">
-                ⚠️ 您尚未登录，请 <a href="/login/index" style="color:#e74c3c;font-weight:600;">点此登录</a> 后参与秒杀
+                ⚠️ 您尚未登录，请 <a id="loginLink" href="/login/index" style="color:#e74c3c;font-weight:600;">点此登录</a> 后参与秒杀
             </span>
             <div class="goods-title" th:text="${goods.goodsName}">商品名称</div>
             <div class="price-block">
@@ -83,7 +83,10 @@
     </div>
 </div>
 <script>
-    $(function () { countDown(); });
+    $(function () {
+        $("#loginLink").attr("href", "/login/index?redirect=" + encodeURIComponent(window.location.pathname + window.location.search));
+        countDown();
+    });
     function countDown() {
         var s = parseInt($("#remainingSeconds").val());
         var tip = $("#seckillTip");
