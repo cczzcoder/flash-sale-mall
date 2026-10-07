@@ -17,6 +17,8 @@ public class Goods {
     private Integer goodsStock;
     /** 所属店铺ID，NULL=平台自营 */
     private Long shopId;
+    /** 商品分类，NULL=未分类 */
+    private String category;
 
     public Long getId() {
         return id;
@@ -80,6 +82,14 @@ public class Goods {
 
     public void setShopId(Long shopId) {
         this.shopId = shopId;
+    }
+
+    public String getCategory() {
+        return category;
+    }
+
+    public void setCategory(String category) {
+        this.category = category;
     }
 
 }

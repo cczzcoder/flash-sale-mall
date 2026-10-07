@@ -67,4 +67,26 @@ class GoodsVoTest {
         vo.setStockCount(5);
         assertFalse(vo.isSoldOut());
     }
+
+    @Test
+    void soldPercentReflectsSoldRatio() {
+        GoodsVo vo = new GoodsVo();
+        assertEquals(0, vo.getSoldPercent());   // 无总库存信息
+
+        vo.setStockTotal(0);
+        assertEquals(0, vo.getSoldPercent());   // 非法分母
+
+        vo.setStockTotal(10);
+        vo.setStockCount(10);
+        assertEquals(0, vo.getSoldPercent());   // 未售出
+
+        vo.setStockCount(4);
+        assertEquals(60, vo.getSoldPercent());
+
+        vo.setStockCount(null);
+        assertEquals(100, vo.getSoldPercent()); // 剩余未知按售罄处理
+
+        vo.setStockCount(15);
+        assertEquals(0, vo.getSoldPercent());   // 剩余超过总量按未售出兜底
+    }
 }

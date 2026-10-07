@@ -161,6 +161,27 @@ class AdminGoodsServiceTest {
     }
 
     @Test
+    void categoryIsTrimmedAndBlankBecomesNull() {
+        AdminGoodsVo vo = validGoods();
+        vo.setCategory("  手机数码  ");
+        when(goodsDao.insertGoods(any())).thenReturn(1);
+        when(goodsDao.insertSeckill(any())).thenReturn(1);
+        assertEquals(ResultCode.SUCCESS.getCode(), service.save(vo, 8L).getCode());
+
+        ArgumentCaptor<Goods> captor = ArgumentCaptor.forClass(Goods.class);
+        verify(goodsDao).insertGoods(captor.capture());
+        assertEquals("手机数码", captor.getValue().getCategory());
+
+        AdminGoodsVo blank = validGoods();
+        blank.setCategory("   ");
+        assertEquals(ResultCode.SUCCESS.getCode(), service.save(blank, 8L).getCode());
+
+        ArgumentCaptor<Goods> blankCaptor = ArgumentCaptor.forClass(Goods.class);
+        verify(goodsDao, org.mockito.Mockito.times(2)).insertGoods(blankCaptor.capture());
+        assertEquals(null, blankCaptor.getValue().getCategory());
+    }
+
+    @Test
     void merchantCannotRestockOrDeleteForeignGoods() {
         com.lijs.seckill.vo.GoodsVo current = new com.lijs.seckill.vo.GoodsVo();
         current.setId(4L);

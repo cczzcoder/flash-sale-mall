@@ -24,6 +24,8 @@ public class GoodsVo extends Goods {
 
     /** 秒杀剩余库存数量 */
     private Integer stockCount;
+    /** 秒杀总库存（已售+剩余），进度条分母 */
+    private Integer stockTotal;
     /** 秒杀活动开始时间 */
     private Date startDate;
     /** 秒杀活动结束时间 */
@@ -41,6 +43,8 @@ public class GoodsVo extends Goods {
     public void    setShopName(String v)          { this.shopName = v; }
     public Integer getStockCount()                { return stockCount; }
     public void    setStockCount(Integer v)       { this.stockCount = v; }
+    public Integer getStockTotal()                { return stockTotal; }
+    public void    setStockTotal(Integer v)       { this.stockTotal = v; }
     public Date    getStartDate()                 { return startDate; }
     public void    setStartDate(Date v)           { this.startDate = v; }
     public Date    getEndDate()                   { return endDate; }
@@ -79,5 +83,15 @@ public class GoodsVo extends Goods {
 
     public boolean isSoldOut() {
         return stockCount == null || stockCount <= 0;
+    }
+
+    /** 已抢购百分比（0-100），用于进度条。stockTotal 缺失/非法时按 0 处理。 */
+    public int getSoldPercent() {
+        if (stockTotal == null || stockTotal <= 0) {
+            return 0;
+        }
+        int remaining = stockCount == null ? 0 : Math.max(0, Math.min(stockCount, stockTotal));
+        int sold = stockTotal - remaining;
+        return (int) Math.round(sold * 100.0 / stockTotal);
     }
 }

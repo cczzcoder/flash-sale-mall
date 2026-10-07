@@ -75,6 +75,7 @@ public class AdminGoodsService {
         goods.setGoodsDetail(vo.getGoodsDetail());
         goods.setGoodsPrice(vo.getGoodsPrice());
         goods.setGoodsStock(current == null ? vo.getStockCount() : current.getGoodsStock());
+        goods.setCategory(trimToNull(vo.getCategory()));
         // 平台管理员新建的商品为自营（shopId=null）；商家新建自动归属其店铺
         goods.setShopId(scopeShopId);
         SeckillGoods seckill = new SeckillGoods();
@@ -160,6 +161,12 @@ public class AdminGoodsService {
 
     private boolean sameStock(Integer left, Integer right) {
         return left == null ? right == null : left.equals(right);
+    }
+
+    private static String trimToNull(String value) {
+        if (value == null) return null;
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     @Transactional

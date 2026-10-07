@@ -23,6 +23,24 @@
         .hero h1 { font-size: 34px; font-weight: 900; letter-spacing: 3px; margin: 0 0 8px; }
         .hero .sub { font-size: 14px; opacity: .82; margin: 0; }
         .hero .watermark { font-size: 96px; opacity: .16; line-height: 1; user-select: none; }
+        /* ---------- Banner 轮播 ---------- */
+        .banner-wrap { width: 1200px; margin: 26px auto 0; }
+        .banner-slide { height: 100%; background: linear-gradient(135deg,#e74c3c 0%,#c0392b 60%,#922b21 100%); }
+        .banner-inner { width: 1140px; margin: 0 auto; height: 100%; display: flex; align-items: center; justify-content: space-between; }
+        .banner-copy { color: #fff; max-width: 660px; }
+        .banner-badge { display: inline-block; background: rgba(255,255,255,.2); border: 1px solid rgba(255,255,255,.4);
+                        border-radius: 20px; padding: 3px 16px; font-size: 12px; margin-bottom: 14px; letter-spacing: 1px; }
+        .banner-copy h2 { font-size: 32px; font-weight: 900; margin: 0 0 10px; }
+        .banner-sub { font-size: 14px; opacity: .85; margin: 0 0 14px; }
+        .banner-price { margin-bottom: 18px; }
+        .bp-seckill { font-size: 30px; font-weight: 900; margin-right: 12px; }
+        .bp-origin  { font-size: 14px; opacity: .65; text-decoration: line-through; }
+        .banner-btn { display: inline-block; background: #fff; color: #e74c3c; font-weight: 800;
+                      border-radius: 8px; padding: 10px 26px; text-decoration: none; }
+        .banner-btn:hover { color: #c0392b; text-decoration: none; }
+        .banner-thumb { width: 260px; height: 220px; background: rgba(255,255,255,.14); border-radius: 14px;
+                        display: flex; align-items: center; justify-content: center; font-size: 72px; overflow: hidden; }
+        .banner-thumb img { width: 100%; height: 100%; object-fit: cover; }
         /* ---------- 布局 ---------- */
         .pc-container { width: 1200px; margin: 26px auto 70px; }
         .section-head { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 20px; }
@@ -51,6 +69,16 @@
         .stock-fill { background: linear-gradient(90deg,#e74c3c,#f39c12); height: 100%; border-radius: 4px; transition: width .4s; }
         .stock-line { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
         .stock-tip { font-size: 12px; color: #e74c3c; font-weight: 500; }
+        .stock-sold { font-size: 12px; color: #999; }
+        .stock-sold b { color: #e74c3c; }
+        /* ---------- 分类筛选 ---------- */
+        .cat-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        .cat-pill { display: inline-block; background: #fff; border: 1px solid #e5e5e5; color: #666; font-size: 13px;
+                    border-radius: 20px; padding: 6px 20px; cursor: pointer; user-select: none; transition: all .2s; }
+        .cat-pill:hover { color: #e74c3c; border-color: #e74c3c; }
+        .cat-pill.active { background: #e74c3c; border-color: #e74c3c; color: #fff; font-weight: 600; }
+        .filter-empty { display: none; border: 1px dashed #e5e5e5; border-radius: 10px; padding: 50px 10px;
+                        text-align: center; color: #999; font-size: 14px; background: #fff; margin-bottom: 20px; }
         .act-tag { display: inline-block; font-size: 12px; font-weight: 700; color: #27ae60; }
         .act-tag.waiting { color: #4a90e2; }
         .act-tag.ended, .act-tag.sold-out { color: #999; }
@@ -85,7 +113,32 @@
     </div>
 </div>
 
-<div class="hero">
+<div class="banner-wrap" th:if="${!#lists.isEmpty(bannerGoods)}">
+    <div class="layui-carousel" id="bannerCarousel">
+        <div carousel-item>
+            <div class="banner-slide" th:each="bg : ${bannerGoods}">
+                <div class="banner-inner">
+                    <div class="banner-copy">
+                        <span class="banner-badge">🔴 限时秒杀 LIVE</span>
+                        <h2 th:text="${bg.goodsName}">限时好物</h2>
+                        <p class="banner-sub" th:text="${bg.goodsTitle}">手慢无货 · 超低折扣 · 正品保障</p>
+                        <div class="banner-price">
+                            <span class="bp-seckill" th:text="'¥' + ${bg.seckillPrice}">¥0</span>
+                            <span class="bp-origin" th:text="'¥' + ${bg.goodsPrice}">¥0</span>
+                        </div>
+                        <a class="banner-btn" th:href="'/goods_detail.htm?goodsId='+${bg.id}">立即抢购 →</a>
+                    </div>
+                    <div class="banner-thumb">
+                        <img th:if="${bg.goodsImg != null and !#strings.isEmpty(bg.goodsImg)}" th:src="${bg.goodsImg}" alt="商品图片"/>
+                        <span th:unless="${bg.goodsImg != null and !#strings.isEmpty(bg.goodsImg)}">🛍️</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="hero" th:if="${#lists.isEmpty(bannerGoods)}">
     <div class="hero-inner">
         <div>
             <div class="live-badge">🔴 限时特卖 LIVE</div>
@@ -99,13 +152,20 @@
 <div class="pc-container">
     <div class="section-head">
         <div class="section-title">🔥 今日秒杀商品</div>
-        <div class="section-count">共 <b th:text="${#lists.size(goodsList)}">0</b> 件好物</div>
+        <div class="section-count">共 <b id="goodsCount" th:text="${#lists.size(goodsList)}">0</b> 件好物</div>
     </div>
 
     <div class="empty-tip" th:if="${#lists.isEmpty(goodsList)}">暂无秒杀活动，敬请期待</div>
 
+    <div class="cat-bar" th:if="${!#lists.isEmpty(categories)}">
+        <span class="cat-pill active" data-cat="">全部</span>
+        <span class="cat-pill" th:each="cat : ${categories}" th:data-cat="${cat}" th:text="${cat}">分类</span>
+    </div>
+
+    <div class="filter-empty" id="filterEmpty">该分类下暂无商品</div>
+
     <div class="layui-row layui-col-space20">
-        <div th:each="goods : ${goodsList}" class="layui-col-xs3">
+        <div th:each="goods : ${goodsList}" class="layui-col-xs3 goods-cell" th:data-cat="${goods.category}">
             <div class="gcard">
                 <a class="gthumb" th:href="'/goods_detail.htm?goodsId='+${goods.id}">
                     <img th:if="${goods.goodsImg != null and !#strings.isEmpty(goods.goodsImg)}" th:src="${goods.goodsImg}" alt="商品图片"/>
@@ -120,10 +180,11 @@
                     <span class="act-tag" th:classappend="${goods.activityStatus == 0} ? ' waiting' : (${goods.activityStatus == 2 or goods.soldOut} ? ' ended' : '')"
                           th:text="${goods.soldOut} ? '已售罄' : (${goods.activityStatus == 0} ? '即将开始' : (${goods.activityStatus == 2} ? '活动已结束' : '正在进行'))">活动状态</span>
                     <div class="stock-bar">
-                        <div class="stock-fill" th:style="'width:' + (${goods.stockCount} > 100 ? 80 : (${goods.stockCount} > 0 ? ${goods.stockCount} : 5)) + '%'"></div>
+                        <div class="stock-fill" th:style="'width:' + ${goods.soldPercent} + '%'"></div>
                     </div>
                     <div class="stock-line">
                         <span class="stock-tip">仅剩 <span th:text="${goods.stockCount}">0</span> 件</span>
+                        <span class="stock-sold">已抢购 <b th:text="${goods.soldPercent}">0</b>%</span>
                     </div>
                     <a th:if="${goods.activityStatus == 1 and !goods.soldOut}" class="btn-buy" th:href="'/goods_detail.htm?goodsId='+${goods.id}">立即抢购 →</a>
                     <span th:unless="${goods.activityStatus == 1 and !goods.soldOut}" class="btn-buy disabled"
@@ -134,5 +195,43 @@
     </div>
 </div>
 <a href="/ai/guide" class="ai-float">🤖 AI 导购</a>
+<script th:src="@{/layui/layui.js}"></script>
+<script>
+    // 分类筛选：列表页有页面缓存，改数据源会带来额外失效成本，这里纯前端过滤
+    (function () {
+        var pills = document.querySelectorAll('.cat-pill');
+        var cells = document.querySelectorAll('.goods-cell');
+        var countEl = document.getElementById('goodsCount');
+        var emptyEl = document.getElementById('filterEmpty');
+        if (!pills.length) { return; }
+        for (var i = 0; i < pills.length; i++) {
+            pills[i].addEventListener('click', function () {
+                for (var j = 0; j < pills.length; j++) { pills[j].classList.remove('active'); }
+                this.classList.add('active');
+                var cat = this.getAttribute('data-cat');
+                var visible = 0;
+                for (var k = 0; k < cells.length; k++) {
+                    var match = !cat || cells[k].getAttribute('data-cat') === cat;
+                    cells[k].style.display = match ? '' : 'none';
+                    if (match) { visible++; }
+                }
+                if (countEl) { countEl.textContent = visible; }
+                if (emptyEl) { emptyEl.style.display = visible === 0 ? 'block' : 'none'; }
+            });
+        }
+    })();
+</script>
+<script th:if="${!#lists.isEmpty(bannerGoods)}">
+    layui.use(['carousel'], function () {
+        layui.carousel.render({
+            elem: '#bannerCarousel',
+            width: '100%',
+            height: '300px',
+            interval: 4000,
+            arrow: 'hover',
+            indicator: 'inside'
+        });
+    });
+</script>
 </body>
 </html>

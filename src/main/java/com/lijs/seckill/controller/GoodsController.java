@@ -24,6 +24,8 @@ import org.thymeleaf.context.WebContext;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 
 /**
@@ -63,8 +65,7 @@ public class GoodsController {
     @RequestMapping("/listWithoutCache")
     public String listWithoutCache(Model model, SeckillUser user) {
         model.addAttribute("user", user);
-        List<GoodsVo> goodsList = goodsService.getGoodsVoList();
-        model.addAttribute("goodsList", goodsList);
+        addListModelAttrs(model, goodsService.getGoodsVoList());
         return "goods_list";
     }
 
@@ -110,8 +111,7 @@ public class GoodsController {
         try {
             // 3. 查询数据并手动渲染模板
             model.addAttribute("user", user);
-            List<GoodsVo> goodsList = goodsService.getGoodsVoList();
-            model.addAttribute("goodsList", goodsList);
+            addListModelAttrs(model, goodsService.getGoodsVoList());
             WebContext context = new WebContext(request, response,
                     request.getServletContext(), request.getLocale(), model.asMap());
             html = templateEngine.process("goods_list", context);
@@ -173,6 +173,32 @@ public class GoodsController {
         WebContext context = new WebContext(request, response,
                 request.getServletContext(), request.getLocale(), model.asMap());
         return templateEngine.process("seckill_fail", context);
+    }
+
+    /**
+     * 列表页公共模型数据：商品列表 + Banner 轮播数据 + 分类集合。
+     * Banner 规则：优先取进行中的活动（最多 3 条），无进行中活动时用列表前 3 条兜底。
+     */
+    private void addListModelAttrs(Model model, List<GoodsVo> goodsList) {
+        model.addAttribute("goodsList", goodsList);
+        List<GoodsVo> banners = new ArrayList<>();
+        for (GoodsVo goods : goodsList) {
+            if (goods.getActivityStatus() == 1 && banners.size() < 3) {
+                banners.add(goods);
+            }
+        }
+        if (banners.isEmpty() && !goodsList.isEmpty()) {
+            banners = new ArrayList<>(goodsList.subList(0, Math.min(3, goodsList.size())));
+        }
+        model.addAttribute("bannerGoods", banners);
+        LinkedHashSet<String> categories = new LinkedHashSet<>();
+        for (GoodsVo goods : goodsList) {
+            String category = goods.getCategory();
+            if (category != null && !category.trim().isEmpty()) {
+                categories.add(category.trim());
+            }
+        }
+        model.addAttribute("categories", categories);
     }
 
     /**

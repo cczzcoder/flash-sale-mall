@@ -14,11 +14,11 @@ import java.util.List;
 public interface GoodsDao extends BaseMapper<SeckillGoods> {
 
     // 多表 JOIN 查询，无法由 BaseMapper 替代，保留注解 SQL
-    @Select("select g.*,mg.stock_count,mg.start_date,mg.end_date,mg.seckill_price" +
+    @Select("select g.*,mg.stock_count,mg.stock_total,mg.start_date,mg.end_date,mg.seckill_price" +
             " from seckill_goods mg left join goods g on mg.goods_id=g.id")
     List<GoodsVo> getGoodsVoList();
 
-    @Select("select g.*,mg.stock_count,mg.start_date,mg.end_date,mg.seckill_price" +
+    @Select("select g.*,mg.stock_count,mg.stock_total,mg.start_date,mg.end_date,mg.seckill_price" +
             " from seckill_goods mg left join goods g on mg.goods_id=g.id where g.id=#{goodsId}")
     GoodsVo getGoodsVoByGoodsId(@Param("goodsId") long goodsId);
 

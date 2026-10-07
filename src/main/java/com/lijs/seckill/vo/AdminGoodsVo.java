@@ -14,6 +14,7 @@ public class AdminGoodsVo {
     @NotBlank private String goodsTitle;
     private String goodsImg;
     private String goodsDetail;
+    private String category;
     @NotNull @DecimalMin("0.00") private Double goodsPrice;
     @NotNull @DecimalMin("0.00") private Double seckillPrice;
     @NotNull @Min(0) private Integer stockCount;
@@ -30,6 +31,8 @@ public class AdminGoodsVo {
     public void setGoodsImg(String goodsImg) { this.goodsImg = goodsImg; }
     public String getGoodsDetail() { return goodsDetail; }
     public void setGoodsDetail(String goodsDetail) { this.goodsDetail = goodsDetail; }
+    public String getCategory() { return category; }
+    public void setCategory(String category) { this.category = category; }
     public Double getGoodsPrice() { return goodsPrice; }
     public void setGoodsPrice(Double goodsPrice) { this.goodsPrice = goodsPrice; }
     public Double getSeckillPrice() { return seckillPrice; }
