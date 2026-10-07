@@ -12,6 +12,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.awt.image.BufferedImage;
+import java.util.Random;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -79,6 +80,15 @@ class VerifyCodeServiceTest {
         assertFalse(verifyCodeService.checkVCode(user, 1L, 7));
 
         verify(redisService, never()).delete(SeckillKey.getSeckillVerifyCode, "10001_1");
+    }
+
+    @Test
+    void generatedVerifyCodeNeverProducesNegativeAnswer() {
+        Random random = new Random(42);
+        for (int i = 0; i < 2000; i++) {
+            String expression = verifyCodeService.createVerifyCode(random);
+            assertTrue(VerifyCodeService.calc(expression) >= 0, expression);
+        }
     }
 
     @Test

@@ -64,16 +64,20 @@ public class VerifyCodeService {
     }
 
     /**
-     * + - *
+     * + - *，结果保证非负：页面输入框只接受数字，负答案无法提交。
      */
-    private String createVerifyCode(Random rdm) {
-        // 生成10以内的
-        int n1 = rdm.nextInt(10);
-        int n2 = rdm.nextInt(10);
-        int n3 = rdm.nextInt(10);
-        char op1 = ops[rdm.nextInt(3)]; // 0  1  2
-        char op2 = ops[rdm.nextInt(3)]; // 0  1  2
-        return "" + n1 + op1 + n2 + op2 + n3;
+    String createVerifyCode(Random rdm) {
+        String expression;
+        do {
+            // 生成10以内的
+            int n1 = rdm.nextInt(10);
+            int n2 = rdm.nextInt(10);
+            int n3 = rdm.nextInt(10);
+            char op1 = ops[rdm.nextInt(3)]; // 0  1  2
+            char op2 = ops[rdm.nextInt(3)]; // 0  1  2
+            expression = "" + n1 + op1 + n2 + op2 + n3;
+        } while (calc(expression) < 0);
+        return expression;
     }
 
     /**
